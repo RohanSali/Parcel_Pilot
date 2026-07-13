@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "536715223671",
+    "project_id": "parcel-pilot-fb",
+    "storage_bucket": "parcel-pilot-fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:536715223671:android:fdb17f0d1a3df509955c72",
+        "android_client_info": {
+          "package_name": "com.parcelpilotapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "536715223671-opcejmpfoog8nh8krlc4jb20bd2tl97j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.parcelpilotapp",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "536715223671-tgbjg9lf4au330ru18opqul4a7froc5q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPU7Ei3_nA81RucNNT36xa0tewOIT8Z2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "536715223671-tgbjg9lf4au330ru18opqul4a7froc5q.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
