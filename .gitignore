@@ -1,21 +1,21 @@
 # Environment
-application/ParcelPilot/.env
-application/ParcelPilot/.env.*
+application/ParcelPilotApp/.env
+application/ParcelPilotApp/.env.*
 
 # Dependencies
-application/ParcelPilot/node_modules/
+application/ParcelPilotApp/node_modules/
 
 # Build output
-application/ParcelPilot/dist/
-application/ParcelPilot/coverage/
+application/ParcelPilotApp/dist/
+application/ParcelPilotApp/coverage/
 
 # Editor
-application/ParcelPilot/.vscode/
+application/ParcelPilotApp/.vscode/
 
 # Android
-application/ParcelPilot/android/.gradle/
-application/ParcelPilot/android/build/
-application/ParcelPilot/android/app/build/
+application/ParcelPilotApp/android/.gradle/
+application/ParcelPilotApp/android/build/
+application/ParcelPilotApp/android/app/build/
 
 # iOS
-application/ParcelPilot/ios/build/
+application/ParcelPilotApp/ios/build/
