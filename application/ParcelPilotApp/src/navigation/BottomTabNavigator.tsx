@@ -1,20 +1,29 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DashboardScreen } from '../screens/DashboardScreen';
-import { VehicleListScreen } from '../screens/VehicleListScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { TaskListScreen } from '../screens/TaskListScreen';
 import { MapViewerScreen } from '../screens/MapViewerScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { BottomTabParamList } from './types';
-import { Home, Truck, List, Map, Settings as SettingsIcon } from 'lucide-react-native';
+import { Home, Bell, List, Map, Settings as SettingsIcon } from 'lucide-react-native';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 export const BottomTabNavigator = () => {
+  const { colors, isDark } = useThemeColors();
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.secondary,
       }}
     >
       <Tab.Screen 
@@ -23,9 +32,9 @@ export const BottomTabNavigator = () => {
         options={{ tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }}
       />
       <Tab.Screen 
-        name="VehicleList" 
-        component={VehicleListScreen} 
-        options={{ tabBarIcon: ({ color, size }) => <Truck color={color} size={size} /> }}
+        name="Notifications" 
+        component={NotificationsScreen} 
+        options={{ tabBarIcon: ({ color, size }) => <Bell color={color} size={size} /> }}
       />
       <Tab.Screen 
         name="TaskList" 

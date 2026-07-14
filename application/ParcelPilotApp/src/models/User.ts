@@ -2,12 +2,15 @@ import { DocumentData, QueryDocumentSnapshot } from '@react-native-firebase/fire
 import { BaseModel } from './BaseModel';
 
 export interface User extends BaseModel {
+  firebaseUid: string;
   userId: string;
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
-  networkMemberships: string[];
   isSuperAdmin: boolean;
+  isAdmin: boolean;
+  ecosystems: string[];
+  ecosystemCode?: string;
 }
 
 export const userConverter = {
@@ -21,12 +24,15 @@ export const userConverter = {
   ): User => {
     const data = snapshot.data();
     return {
+      firebaseUid: snapshot.id,
       userId: data.userId,
       email: data.email,
       displayName: data.displayName,
       photoURL: data.photoURL,
-      networkMemberships: data.networkMemberships || [],
       isSuperAdmin: data.isSuperAdmin || false,
+      isAdmin: data.isAdmin || false,
+      ecosystems: data.ecosystems || [],
+      ecosystemCode: data.ecosystemCode,
       createdAt: data.createdAt,
       createdBy: data.createdBy,
       updatedAt: data.updatedAt,

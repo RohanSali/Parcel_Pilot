@@ -9,7 +9,7 @@ import { AuthService } from '../services/auth/AuthService';
 // Import all screens (placeholder)
 import { SplashScreen } from '../screens/SplashScreen';
 import { AuthNavigator } from './AuthNavigator';
-import { NetworkSelectionScreen } from '../screens/NetworkSelectionScreen';
+import { EcosystemPromptScreen } from '../screens/EcosystemPromptScreen';
 import { VehicleDetailsScreen } from '../screens/VehicleDetailsScreen';
 import { VehicleRegistrationScreen } from '../screens/VehicleRegistrationScreen';
 import { CallVehicleScreen } from '../screens/CallVehicleScreen';
@@ -29,7 +29,7 @@ import { NotFoundScreen } from '../screens/NotFoundScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator = () => {
-  const { status, restoreSession } = useAuthStore();
+  const { status, restoreSession, showEcosystemPrompt } = useAuthStore();
   const { activeNetwork } = useNetworkStore();
 
   useEffect(() => {
@@ -45,8 +45,8 @@ export const RootNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {status === 'unauthenticated' ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
-      ) : !activeNetwork ? (
-        <Stack.Screen name="NetworkSelection" component={NetworkSelectionScreen} />
+      ) : showEcosystemPrompt ? (
+        <Stack.Screen name="EcosystemPrompt" component={EcosystemPromptScreen} />
       ) : (
         <>
           <Stack.Screen name="Main" component={BottomTabNavigator} />

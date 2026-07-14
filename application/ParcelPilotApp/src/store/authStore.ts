@@ -9,24 +9,36 @@ type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 interface AuthStoreState {
   user: AppUser | null;
   status: AuthStatus;
+  showEcosystemPrompt: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   restoreSession: (firebaseUser: FirebaseUser | null) => Promise<void>;
+  completeEcosystemSetup: () => void;
+  triggerEcosystemPrompt: () => void;
+  updateUser: (user: Partial<AppUser>) => void;
 }
 
 export const useAuthStore = create<AuthStoreState>((set) => ({
   user: null,
   status: 'loading',
+  showEcosystemPrompt: false,
+
+  completeEcosystemSetup: () => set({ showEcosystemPrompt: false }),
+  triggerEcosystemPrompt: () => set({ showEcosystemPrompt: true }),
+  
+  updateUser: (updates) => set((state) => ({ 
+    user: state.user ? { ...state.user, ...updates } : null 
+  })),
 
   signIn: async () => {
     try {
       set({ status: 'loading' });
       const credential = await AuthService.signInWithGoogle();
       if (credential?.user) {
-        const userModel = await authRepository.syncUser(credential.user);
-        set({ user: userModel, status: 'authenticated' });
+        const { user, isNewUser } = await authRepository.syncUser(credential.user);
+        set({ user, status: 'authenticated', showEcosystemPrompt: isNewUser });
       } else {
         set({ status: 'unauthenticated' });
       }
@@ -42,8 +54,8 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       set({ status: 'loading' });
       const credential = await AuthService.loginWithEmail(email, password);
       if (credential?.user) {
-        const userModel = await authRepository.syncUser(credential.user);
-        set({ user: userModel, status: 'authenticated' });
+        const { user, isNewUser } = await authRepository.syncUser(credential.user);
+        set({ user, status: 'authenticated', showEcosystemPrompt: isNewUser });
       } else {
         set({ status: 'unauthenticated' });
       }
@@ -59,8 +71,8 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       set({ status: 'loading' });
       const credential = await AuthService.registerWithEmail(email, password);
       if (credential?.user) {
-        const userModel = await authRepository.syncUser(credential.user);
-        set({ user: userModel, status: 'authenticated' });
+        const { user, isNewUser } = await authRepository.syncUser(credential.user);
+        set({ user, status: 'authenticated', showEcosystemPrompt: isNewUser });
       } else {
         set({ status: 'unauthenticated' });
       }
@@ -86,8 +98,8 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
   restoreSession: async (firebaseUser: FirebaseUser | null) => {
     if (firebaseUser) {
       try {
-        const userModel = await authRepository.syncUser(firebaseUser);
-        set({ user: userModel, status: 'authenticated' });
+        const { user, isNewUser } = await authRepository.syncUser(firebaseUser);
+        set({ user, status: 'authenticated', showEcosystemPrompt: isNewUser });
       } catch (error) {
         console.error('RestoreSession Error:', error);
         set({ user: null, status: 'unauthenticated' });

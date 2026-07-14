@@ -1,19 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useAuthStore } from '../store/authStore';
-import { colors } from '../theme';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { LogOut, User as UserIcon } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { CustomModal, ModalAction } from '../components/ui/CustomModal';
 
 export const ProfileScreen = () => {
   const { user, signOut, status } = useAuthStore();
   const navigation = useNavigation();
+  const { colors, isDark } = useThemeColors();
+  const styles = createStyles(colors, isDark);
+
+  const [modalConfig, setModalConfig] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    actions?: ModalAction[];
+  }>({ visible: false, title: '', message: '' });
+
+  const closeModal = () => setModalConfig(prev => ({ ...prev, visible: false }));
 
   const handleSignOut = async () => {
     try {
       await signOut();
     } catch (error: any) {
-      Alert.alert('Sign Out Failed', error.message || 'An error occurred.');
+      setModalConfig({
+        visible: true,
+        title: 'Sign Out Failed',
+        message: error.message || 'An error occurred.',
+        actions: [{ label: 'OK', onPress: () => {}, variant: 'primary' }]
+      });
     }
   };
 
@@ -33,7 +50,7 @@ export const ProfileScreen = () => {
 
       <View style={styles.avatarContainer}>
         <View style={styles.avatarPlaceholder}>
-          <UserIcon color={colors.dark.text.inverse} size={48} />
+          <UserIcon color={colors.text.inverse} size={48} />
         </View>
         <Text style={styles.displayName}>{user?.displayName || 'Parcel Pilot User'}</Text>
         {user?.isSuperAdmin && (
@@ -54,6 +71,12 @@ export const ProfileScreen = () => {
             {user?.userId || 'N/A'}
           </Text>
         </View>
+        {user?.isSuperAdmin && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Ecosystem Join Code</Text>
+            <Text style={styles.infoValue}>{user.ecosystemCode || 'Not Generated'}</Text>
+          </View>
+        )}
       </View>
 
       <TouchableOpacity 
@@ -61,17 +84,25 @@ export const ProfileScreen = () => {
         onPress={handleSignOut}
         disabled={loading}
       >
-        <LogOut color={colors.dark.danger} size={20} />
+        <LogOut color={colors.danger} size={20} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        onClose={closeModal}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        actions={modalConfig.actions}
+      />
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -83,14 +114,14 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   backText: {
-    color: colors.dark.primary,
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.dark.text.primary,
+    color: colors.text.primary,
   },
   avatarContainer: {
     alignItems: 'center',
@@ -101,7 +132,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: colors.dark.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -109,22 +140,22 @@ const styles = StyleSheet.create({
   displayName: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: colors.dark.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   badge: {
-    backgroundColor: colors.dark.secondary,
+    backgroundColor: colors.secondary,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
   },
   badgeText: {
-    color: colors.dark.text.inverse,
+    color: colors.text.inverse,
     fontSize: 12,
     fontWeight: 'bold',
   },
   infoSection: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
     borderRadius: 12,
     marginHorizontal: 24,
     marginBottom: 40,
@@ -136,16 +167,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
   },
   infoLabel: {
     fontSize: 14,
-    color: colors.dark.text.secondary,
+    color: colors.text.secondary,
     flex: 1,
   },
   infoValue: {
     fontSize: 16,
-    color: colors.dark.text.primary,
+    color: colors.text.primary,
     flex: 2,
     textAlign: 'right',
   },
@@ -159,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   signOutText: {
-    color: colors.dark.danger,
+    color: colors.danger,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 12,

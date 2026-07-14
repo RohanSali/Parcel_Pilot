@@ -12,19 +12,23 @@ export class AuthRepository extends FirestoreRepository<User> {
    * Syncs the Firebase Auth user with Firestore. 
    * Creates a new user document if one doesn't exist.
    */
-  async syncUser(firebaseUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }): Promise<User> {
+  async syncUser(firebaseUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }): Promise<{ user: User, isNewUser: boolean }> {
     let user = await this.getById(firebaseUser.uid);
+    let isNewUser = false;
 
     if (!user) {
+      isNewUser = true;
       // First login: Create User Document
       // Generate a UUID for the user independent of their Firebase UID as per SRS
       const newUser: Partial<User> = {
+        firebaseUid: firebaseUser.uid,
         userId: uuidv4(), 
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
-        networkMemberships: [],
+        ecosystems: [],
         isSuperAdmin: false,
+        isAdmin: false,
         createdBy: firebaseUser.uid,
         status: 'active',
       };
@@ -37,7 +41,7 @@ export class AuthRepository extends FirestoreRepository<User> {
       throw new Error('Failed to sync user');
     }
 
-    return user;
+    return { user, isNewUser };
   }
 }
 

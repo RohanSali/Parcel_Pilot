@@ -5,6 +5,9 @@ export interface Network extends BaseModel {
   networkId: string;
   name: string;
   superAdminId: string;
+  admins: string[];
+  joinCode?: string;
+  joinCodeExpiresAt?: number;
 }
 
 export const networkConverter = {
@@ -21,6 +24,9 @@ export const networkConverter = {
       networkId: data.networkId,
       name: data.name,
       superAdminId: data.superAdminId,
+      admins: data.admins || [],
+      joinCode: data.joinCode,
+      joinCodeExpiresAt: data.joinCodeExpiresAt,
       createdAt: data.createdAt,
       createdBy: data.createdBy,
       updatedAt: data.updatedAt,

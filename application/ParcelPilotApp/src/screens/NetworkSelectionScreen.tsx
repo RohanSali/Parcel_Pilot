@@ -12,8 +12,8 @@ export const NetworkSelectionScreen = () => {
   // Placeholder data - in a real app this would come from a query to Firestore
   // filtering networks where the user is a member.
   const mockNetworks: Network[] = [
-    { networkId: 'net-1', name: 'Main Warehouse', superAdminId: 'sys', createdAt: null, createdBy: null, updatedAt: null, updatedBy: null, isDeleted: false, status: 'active', version: 1 },
-    { networkId: 'net-2', name: 'Test Facility', superAdminId: 'sys', createdAt: null, createdBy: null, updatedAt: null, updatedBy: null, isDeleted: false, status: 'active', version: 1 },
+    { networkId: 'net-1', name: 'Main Warehouse', superAdminId: 'sys', admins: [], createdAt: null, createdBy: null, updatedAt: null, updatedBy: null, isDeleted: false, status: 'active', version: 1 },
+    { networkId: 'net-2', name: 'Test Facility', superAdminId: 'sys', admins: [], createdAt: null, createdBy: null, updatedAt: null, updatedBy: null, isDeleted: false, status: 'active', version: 1 },
   ];
 
   return (

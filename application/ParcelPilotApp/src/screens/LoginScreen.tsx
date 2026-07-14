@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useAuthStore } from '../store/authStore';
-import { colors } from '../theme';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
@@ -13,6 +13,8 @@ export const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const { colors, isDark } = useThemeColors();
+  const styles = createStyles(colors, isDark);
 
   const loading = status === 'loading';
 
@@ -48,7 +50,7 @@ export const LoginScreen = () => {
         <TextInput
           style={styles.input}
           placeholder="Email"
-          placeholderTextColor={colors.dark.text.secondary}
+          placeholderTextColor={colors.text.secondary}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -58,7 +60,7 @@ export const LoginScreen = () => {
         <TextInput
           style={styles.input}
           placeholder="Password"
-          placeholderTextColor={colors.dark.text.secondary}
+          placeholderTextColor={colors.text.secondary}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -99,10 +101,10 @@ export const LoginScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: colors.dark.background,
+    backgroundColor: colors.background,
   },
   formContainer: {
     flex: 1,
@@ -113,18 +115,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: colors.dark.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: colors.dark.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 40,
   },
   input: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: colors.dark.text.primary,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    color: colors.text.primary,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -132,7 +134,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   button: {
-    backgroundColor: colors.dark.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 8,
@@ -141,7 +143,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   buttonText: {
-    color: colors.dark.text.inverse,
+    color: colors.text.inverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -150,14 +152,14 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   linkText: {
-    color: colors.dark.primary,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   googleButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 8,
@@ -165,7 +167,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   googleButtonText: {
-    color: colors.dark.text.primary,
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -178,10 +180,10 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
   },
   dividerText: {
-    color: colors.dark.text.secondary,
+    color: colors.text.secondary,
     marginHorizontal: 12,
   },
 });

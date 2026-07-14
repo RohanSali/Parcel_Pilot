@@ -2,7 +2,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type BottomTabParamList = {
   Dashboard: undefined;
-  VehicleList: undefined;
+  Notifications: undefined;
   TaskList: undefined;
   MapViewer: undefined;
   Settings: undefined;
@@ -16,6 +16,7 @@ export type AuthStackParamList = {
 export type RootStackParamList = {
   Splash: undefined;
   Auth: NavigatorScreenParams<AuthStackParamList>;
+  EcosystemPrompt: undefined;
   NetworkSelection: undefined;
   Main: NavigatorScreenParams<BottomTabParamList>;
   VehicleDetails: { vehicleId: string };
