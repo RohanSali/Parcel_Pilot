@@ -1,25 +1,127 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { useNotificationStore } from '../store/notificationStore';
+import { useAuthStore } from '../store/authStore';
+import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, deleteDoc } from '@react-native-firebase/firestore';
+import { UserNotification } from '../models/User';
+import { Check, X, ArrowLeft } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import NotificationService from '../services/NotificationService';
 
 export const NotificationsScreen = () => {
-  const { notifications, clearAll, addNotification } = useNotificationStore();
+  const { user } = useAuthStore();
   const { colors, isDark } = useThemeColors();
   const styles = createStyles(colors, isDark);
+  const navigation = useNavigation();
 
-  // For demonstration, populate some mock data if empty on first mount
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    if (notifications.length === 0) {
-      addNotification({ title: 'Welcome!', message: 'This is the new notifications center.', type: 'System' });
-      addNotification({ title: 'Network Update', message: 'New features are available.', type: 'Alert' });
+    fetchNotifications();
+  }, [user]);
+
+  const fetchNotifications = async () => {
+    if (!user?.firebaseUid) return;
+    try {
+      const db = getFirestore();
+      const notifsRef = collection(db, 'users', user.firebaseUid, 'notifications');
+      const snap = await getDocs(notifsRef);
+      const fetched: UserNotification[] = [];
+      snap.forEach(docSnap => {
+        fetched.push({ id: docSnap.id, ...docSnap.data() } as UserNotification);
+      });
+      fetched.sort((a, b) => b.createdAt - a.createdAt);
+      setNotifications(fetched);
+    } catch (error) {
+      console.error('Failed to fetch notifications', error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
+
+  const clearAll = async () => {
+    if (!user?.firebaseUid) return;
+    try {
+      const db = getFirestore();
+      for (const notif of notifications) {
+        await deleteDoc(doc(db, 'users', user.firebaseUid, 'notifications', notif.id));
+      }
+      setNotifications([]);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDismiss = async (notifId: string) => {
+    if (!user?.firebaseUid) return;
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'users', user.firebaseUid, 'notifications', notifId));
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleAcceptInvite = async (notif: UserNotification) => {
+    if (!user?.firebaseUid || !notif.ecosystemId || !notif.networkId) return;
+    setLoading(true);
+    try {
+      const db = getFirestore();
+      
+      const ecoRef = doc(db, 'ecosystems', notif.ecosystemId);
+      const ecoSnap = await getDoc(ecoRef);
+      const isExisting = typeof ecoSnap.exists === 'function' ? ecoSnap.exists() : ecoSnap.exists;
+      if (isExisting) {
+        const usersMap = ecoSnap.data()?.users || {};
+        const myEcoUser = usersMap[user.userId];
+        if (myEcoUser) {
+          const currentNetworks = myEcoUser.networks || [];
+          if (!currentNetworks.includes(notif.networkId)) {
+            await updateDoc(ecoRef, {
+              [`users.${user.userId}.networks`]: [...currentNetworks, notif.networkId]
+            });
+
+            // Need to get network name from ecoSnap or just use networkId.
+            // Wait, ecosystems/{ecoId} contains a 'networks' map. Let's get the name.
+            const networksMap = ecoSnap.data()?.networks || {};
+            const netName = networksMap[notif.networkId]?.name || 'a network';
+
+            await NotificationService.notifyEcosystemAdmins(notif.ecosystemId, {
+              type: 'NETWORK_JOIN',
+              title: 'Network Update',
+              message: `${user.displayName || 'A user'} accepted the invitation and joined ${netName}.`
+            }, false);
+          }
+        }
+      }
+
+      await handleDismiss(notif.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && notifications.length === 0) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>Notifications</Text>
+        <View style={styles.titleRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ArrowLeft color={colors.text.primary} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Notifications</Text>
+        </View>
         {notifications.length > 0 && (
           <TouchableOpacity onPress={clearAll} style={styles.clearButton}>
             <Text style={styles.clearButtonText}>Clear All</Text>
@@ -39,10 +141,22 @@ export const NotificationsScreen = () => {
             <View style={styles.notificationCard}>
               <View style={styles.header}>
                 <Text style={styles.notificationTitle}>{item.title}</Text>
-                <Text style={styles.date}>{item.date}</Text>
+                <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.message}>{item.message}</Text>
-              <Text style={styles.badge}>{item.type}</Text>
+              
+              {item.type === 'NETWORK_INVITE' && (
+                <View style={styles.inviteActions}>
+                  <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptInvite(item)}>
+                    <Check color={colors.success} size={16} />
+                    <Text style={styles.acceptText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.declineButton} onPress={() => handleDismiss(item.id)}>
+                    <X color={colors.danger} size={16} />
+                    <Text style={styles.declineText}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
           contentContainerStyle={styles.list}
@@ -69,6 +183,13 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text.primary,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 16,
   },
   clearButton: {
     padding: 8,
@@ -108,18 +229,41 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   message: {
     fontSize: 14,
     color: colors.text.secondary,
-    marginBottom: 12,
+    marginBottom: 16,
     lineHeight: 20,
   },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.05)',
-    color: colors.text.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    fontSize: 12,
-    overflow: 'hidden',
+  inviteActions: {
+    flexDirection: 'row',
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+  },
+  acceptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  acceptText: {
+    color: colors.success,
+    fontWeight: 'bold',
+  },
+  declineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  declineText: {
+    color: colors.danger,
+    fontWeight: 'bold',
   },
   emptyState: {
     flex: 1,

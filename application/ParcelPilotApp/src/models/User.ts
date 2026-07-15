@@ -1,6 +1,17 @@
 import { DocumentData, QueryDocumentSnapshot } from '@react-native-firebase/firestore';
 import { BaseModel } from './BaseModel';
 
+export interface UserNotification {
+  id: string;
+  type: 'NETWORK_INVITE' | 'GENERAL';
+  title: string;
+  message: string;
+  ecosystemId?: string;
+  networkId?: string;
+  createdAt: number;
+  read: boolean;
+}
+
 export interface User extends BaseModel {
   firebaseUid: string;
   userId: string;
@@ -8,9 +19,9 @@ export interface User extends BaseModel {
   displayName: string | null;
   photoURL: string | null;
   isSuperAdmin: boolean;
-  isAdmin: boolean;
   ecosystems: string[];
   ecosystemCode?: string;
+  active_econet?: { ecosystemId: string; networkId: string | null };
 }
 
 export const userConverter = {
@@ -30,9 +41,9 @@ export const userConverter = {
       displayName: data.displayName,
       photoURL: data.photoURL,
       isSuperAdmin: data.isSuperAdmin || false,
-      isAdmin: data.isAdmin || false,
       ecosystems: data.ecosystems || [],
       ecosystemCode: data.ecosystemCode,
+      active_econet: data.active_econet,
       createdAt: data.createdAt,
       createdBy: data.createdBy,
       updatedAt: data.updatedAt,

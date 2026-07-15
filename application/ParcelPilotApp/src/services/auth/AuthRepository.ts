@@ -1,7 +1,15 @@
 import { FirestoreRepository } from '../firebase/FirestoreRepository';
 import { User, userConverter } from '../../models/User';
 import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
+
+const generateUserId = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = 'USR-';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 
 export class AuthRepository extends FirestoreRepository<User> {
   constructor() {
@@ -22,13 +30,12 @@ export class AuthRepository extends FirestoreRepository<User> {
       // Generate a UUID for the user independent of their Firebase UID as per SRS
       const newUser: Partial<User> = {
         firebaseUid: firebaseUser.uid,
-        userId: uuidv4(), 
+        userId: generateUserId(), 
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
         ecosystems: [],
         isSuperAdmin: false,
-        isAdmin: false,
         createdBy: firebaseUser.uid,
         status: 'active',
       };

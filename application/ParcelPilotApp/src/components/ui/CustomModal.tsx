@@ -13,6 +13,7 @@ interface CustomModalProps {
   onClose: () => void;
   title?: string;
   message?: string;
+  customContent?: React.ReactNode;
   actions?: ModalAction[];
   children?: React.ReactNode;
 }
@@ -22,6 +23,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({
   onClose, 
   title, 
   message, 
+  customContent,
   actions,
   children
 }) => {
@@ -51,6 +53,12 @@ export const CustomModal: React.FC<CustomModalProps> = ({
               {title && <Text style={styles.title}>{title}</Text>}
               {message && <Text style={styles.message}>{message}</Text>}
               
+              {customContent && (
+                <View style={styles.contentContainer}>
+                  {customContent}
+                </View>
+              )}
+
               {children && (
                 <View style={styles.contentContainer}>
                   {children}

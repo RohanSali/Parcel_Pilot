@@ -3,160 +3,85 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 
 import { useAuthStore } from '../store/authStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { Plus, Users, Key, LogIn, CheckCircle } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
+import { Plus, Users, Key, LogIn, CheckCircle, Bell, Settings as SettingsIcon } from 'lucide-react-native';
 import { Network } from '../models/Network';
 import { CustomModal, ModalAction } from '../components/ui/CustomModal';
+import { NotificationBell } from '../components/ui/NotificationBell';
 
 export const DashboardScreen = () => {
   const { user } = useAuthStore();
-  const { activeNetwork, setActiveNetwork } = useNetworkStore();
-  const [joinCode, setJoinCode] = useState('');
   const { colors, isDark } = useThemeColors();
   const styles = createStyles(colors, isDark);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const [modalConfig, setModalConfig] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    actions?: ModalAction[];
-  }>({ visible: false, title: '', message: '' });
+  const isSuperAdmin = user?.isSuperAdmin;
 
-  const showModal = (title: string, message: string, actions?: ModalAction[]) => {
-    setModalConfig({
-      visible: true,
-      title,
-      message,
-      actions: actions || [{ label: 'OK', onPress: () => {}, variant: 'primary' }]
-    });
-  };
+  return (
+    <View style={styles.mainContainer}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Parcel Pilot</Text>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <NotificationBell onPress={() => navigation.navigate('Notifications')} color={colors.text.primary} size={24} />
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+            <SettingsIcon color={colors.text.primary} size={24} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
-  const closeModal = () => setModalConfig(prev => ({ ...prev, visible: false }));
-
-  // Placeholder function
-  const handleJoinNetwork = () => {
-    if (!joinCode) return;
-    showModal('Join Network', `Attempting to join network with code: ${joinCode}`);
-  };
-
-  const handleCreateNetwork = () => {
-    showModal('Create Network', 'Network creation flow will launch here.');
-  };
-
-  const handleGenerateJoinCode = () => {
-    showModal('Generated Code', 'A 5-minute joining code has been generated: XYZ123');
-  };
-
-  const handleInviteUser = () => {
-    showModal('Invite User', 'User invitation modal will launch here.');
-  };
-
-  // Mock list of networks the user belongs to
-  const myNetworks: Network[] = []; 
-
-  const isEcosystemAdmin = user?.isAdmin || user?.isSuperAdmin;
-
-  if (!activeNetwork) {
-    return (
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Welcome, {user?.displayName || 'Pilot'}</Text>
-        <Text style={styles.subtitle}>You are not currently in an active network.</Text>
+        <Text style={styles.subtitle}>Dashboard Overview</Text>
 
-        {isEcosystemAdmin && (
-          <View style={styles.adminCard}>
-            <Text style={styles.cardTitle}>Ecosystem Admin Controls</Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleCreateNetwork}>
-              <Plus color={colors.text.inverse} size={20} />
-              <Text style={styles.primaryButtonText}>Create New Network</Text>
+        {isSuperAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Manage Users</Text>
+            <Text style={{ color: colors.text.secondary, marginBottom: 16 }}>Manage ecosystem users, roles, and access control.</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('UserManagement')}>
+              <Users color={colors.text.inverse} size={20} />
+              <Text style={styles.primaryButtonText}>Manage Users</Text>
             </TouchableOpacity>
           </View>
         )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Join a Network</Text>
-          <View style={styles.inputGroup}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter 5-digit Join Code"
-              placeholderTextColor={colors.text.secondary}
-              value={joinCode}
-              onChangeText={setJoinCode}
-              autoCapitalize="characters"
-            />
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleJoinNetwork}>
-              <LogIn color={colors.primary} size={20} />
-              <Text style={styles.secondaryButtonText}>Join</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.cardTitle}>Networks</Text>
+          <Text style={{ color: colors.text.secondary, marginBottom: 16 }}>Create, join, and manage networks within this ecosystem.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('ManageNetworks')}>
+            <Key color={colors.text.inverse} size={20} />
+            <Text style={styles.primaryButtonText}>Enter Networks Hub</Text>
+          </TouchableOpacity>
         </View>
-
-        {myNetworks.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Networks</Text>
-            {myNetworks.map((net) => (
-              <TouchableOpacity key={net.networkId} style={styles.networkItem} onPress={() => setActiveNetwork(net)}>
-                <Text style={styles.networkItemText}>{net.name}</Text>
-                <CheckCircle color={colors.success} size={20} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        <CustomModal
-          visible={modalConfig.visible}
-          onClose={closeModal}
-          title={modalConfig.title}
-          message={modalConfig.message}
-          actions={modalConfig.actions}
-        />
       </ScrollView>
-    );
-  }
-
-  // Active Network View
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{activeNetwork.name}</Text>
-      <Text style={styles.subtitle}>Dashboard Overview</Text>
-
-      {/* Admin Controls within a Network */}
-      {isEcosystemAdmin && (
-        <View style={styles.adminCard}>
-          <Text style={styles.cardTitle}>Network Administration</Text>
-          
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleGenerateJoinCode}>
-              <Key color={colors.text.primary} size={20} />
-              <Text style={styles.actionButtonText}>Generate 5-min Code</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton} onPress={handleInviteUser}>
-              <Users color={colors.text.primary} size={20} />
-              <Text style={styles.actionButtonText}>Invite via UUID</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Normal Dashboard Widgets go here */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Network Stats</Text>
-        <Text style={{ color: colors.text.secondary }}>Active Vehicles: 0</Text>
-        <Text style={{ color: colors.text.secondary }}>Pending Tasks: 0</Text>
-      </View>
-      <CustomModal
-        visible={modalConfig.visible}
-        onClose={closeModal}
-        title={modalConfig.title}
-        message={modalConfig.message}
-        actions={modalConfig.actions}
-      />
-    </ScrollView>
+    </View>
   );
 };
 
 const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text.primary,
+  },
   container: {
     padding: 24,
-    paddingTop: 60,
     flexGrow: 1,
     backgroundColor: colors.background,
   },

@@ -5,7 +5,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useThemeStore } from '../store/themeStore';
-import { User, ChevronRight, Bell, Shield, HelpCircle, Layers, Moon, Sun, Smartphone } from 'lucide-react-native';
+import { User, ChevronRight, Bell, Shield, HelpCircle, Layers, Moon, Sun, Smartphone, ArrowLeft } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
 import { CustomModal } from '../components/ui/CustomModal';
 
@@ -33,7 +33,12 @@ export const SettingsScreen = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.headerTitle}>Settings</Text>
+      <View style={styles.headerContainer}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <ArrowLeft color={colors.text.primary} size={24} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
+      </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
@@ -49,19 +54,7 @@ export const SettingsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ecosystem</Text>
-        <TouchableOpacity 
-          style={styles.menuItem}
-          onPress={() => triggerEcosystemPrompt()}
-        >
-          <View style={styles.menuItemLeft}>
-            <Layers color={colors.text.primary} size={24} />
-            <Text style={styles.menuItemText}>Join Ecosystem</Text>
-          </View>
-          <ChevronRight color={colors.text.secondary} size={20} />
-        </TouchableOpacity>
-      </View>
+
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Appearance</Text>
@@ -82,14 +75,17 @@ export const SettingsScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Preferences</Text>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => navigation.navigate('Ecosystems')}
+        >
           <View style={styles.menuItemLeft}>
-            <Bell color={colors.text.primary} size={24} />
-            <Text style={styles.menuItemText}>Notifications</Text>
+            <Layers color={colors.text.primary} size={24} />
+            <Text style={styles.menuItemText}>My Ecosystems</Text>
           </View>
           <ChevronRight color={colors.text.secondary} size={20} />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
             <Shield color={colors.text.primary} size={24} />
@@ -131,12 +127,20 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  backButton: {
+    marginRight: 16,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.text.primary,
-    padding: 24,
-    paddingTop: 60,
   },
   section: {
     marginBottom: 24,

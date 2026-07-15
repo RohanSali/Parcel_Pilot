@@ -9,6 +9,7 @@ import { AuthService } from '../services/auth/AuthService';
 // Import all screens (placeholder)
 import { SplashScreen } from '../screens/SplashScreen';
 import { AuthNavigator } from './AuthNavigator';
+import { DashboardScreen } from '../screens/DashboardScreen';
 import { EcosystemPromptScreen } from '../screens/EcosystemPromptScreen';
 import { VehicleDetailsScreen } from '../screens/VehicleDetailsScreen';
 import { VehicleRegistrationScreen } from '../screens/VehicleRegistrationScreen';
@@ -22,9 +23,12 @@ import { BroadcastMessagingScreen } from '../screens/BroadcastMessagingScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { RolesPermissionsScreen } from '../screens/RolesPermissionsScreen';
 import { UserManagementScreen } from '../screens/UserManagementScreen';
+import { ManageNetworksScreen } from '../screens/ManageNetworksScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { AboutScreen } from '../screens/AboutScreen';
 import { NotFoundScreen } from '../screens/NotFoundScreen';
+import { EcosystemsScreen } from '../screens/EcosystemsScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -49,6 +53,7 @@ export const RootNavigator = () => {
         <Stack.Screen name="EcosystemPrompt" component={EcosystemPromptScreen} />
       ) : (
         <>
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="Main" component={BottomTabNavigator} />
           <Stack.Screen name="VehicleDetails" component={VehicleDetailsScreen} />
           <Stack.Screen name="VehicleRegistration" component={VehicleRegistrationScreen} />
@@ -62,7 +67,10 @@ export const RootNavigator = () => {
           <Stack.Screen name="Analytics" component={AnalyticsScreen} />
           <Stack.Screen name="RolesPermissions" component={RolesPermissionsScreen} />
           <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+          <Stack.Screen name="ManageNetworks" component={ManageNetworksScreen} />
+          <Stack.Screen name="Ecosystems" component={EcosystemsScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="About" component={AboutScreen} />
           <Stack.Screen name="NotFound" component={NotFoundScreen} />
         </>

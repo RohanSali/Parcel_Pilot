@@ -7,7 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { CustomModal, ModalAction } from '../components/ui/CustomModal';
-import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from '@react-native-firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion } from '@react-native-firebase/firestore';
+import NotificationService from '../services/NotificationService';
 
 export const EcosystemPromptScreen = () => {
   const { user, completeEcosystemSetup, updateUser, signOut } = useAuthStore();
@@ -81,6 +82,21 @@ export const EcosystemPromptScreen = () => {
               ecosystemCode: newEcosystemCode,
             });
 
+            const ecoRef = doc(db, 'ecosystems', newEcosystemCode);
+            await setDoc(ecoRef, {
+              ownerName: user.displayName || 'SuperAdmin',
+              ownerFirebaseUid: user.firebaseUid,
+              networks: {},
+              users: {
+                [user.userId]: {
+                  firebaseUid: user.firebaseUid,
+                  displayName: user.displayName || 'Unknown',
+                  role: 'SuperAdmin'
+                }
+              },
+              createdAt: Date.now()
+            });
+
             updateUser({ isSuperAdmin: true, ecosystemCode: newEcosystemCode });
 
             setModalConfig({
@@ -100,12 +116,42 @@ export const EcosystemPromptScreen = () => {
           actions: [{ label: 'OK', onPress: closeModal, variant: 'danger' }]
         });
       } else {
+        const ecoRef = doc(db, 'ecosystems', code);
+        const ecoSnap = typeof getDoc === 'function' ? await getDoc(ecoRef) : await (ecoRef as any).get();
+        const ecoExists = typeof ecoSnap.exists === 'function' ? ecoSnap.exists() : ecoSnap.exists;
+
+        if (!ecoExists) {
+          setModalConfig({
+            visible: true,
+            title: 'Invalid Code',
+            message: 'Ecosystem not found.',
+            actions: [{ label: 'OK', onPress: closeModal, variant: 'danger' }]
+          });
+          setLoading(false);
+          return;
+        }
+
         const newEcosystems = [...(user.ecosystems || []), code];
         await authRepository.update(user.firebaseUid, {
           ecosystems: newEcosystems
         });
 
+        await updateDoc(ecoRef, {
+          [`users.${user.userId}`]: {
+            firebaseUid: user.firebaseUid,
+            displayName: user.displayName || 'Unknown',
+            role: 'User'
+          }
+        });
+
         updateUser({ ecosystems: newEcosystems });
+
+        // Notify only SuperAdmins that a user joined
+        await NotificationService.notifyEcosystemAdmins(code, {
+          type: 'ECOSYSTEM_JOIN',
+          title: 'Ecosystem Alert',
+          message: `${user.displayName || 'A user'} has joined your ecosystem.`
+        }, true);
 
         setModalConfig({
           visible: true,
