@@ -2,10 +2,10 @@
 ## Parcel Pilot Interface
 ### Software Requirements Specification & System Design Document
 
-**Version:** 1.0 (Frozen Baseline)
+**Version:** 1.1 (SRS v1.0 Baseline + Architecture Information)
 **Document Classification:** Internal / Project Baseline
-**Date:** 12 July 2026
-**Stack:** Fleet-Centric Architecture · Firebase Firestore · React Native (TypeScript) · Arduino Uno · Python RL Engine
+**Date:** 15 July 2026
+**Stack:** Fleet-Centric Architecture · FastAPI Fleet Orchestrator · Firebase Auth + Firestore · React Native (TypeScript) · Arduino Uno · Unity Simulation · Python RL Engine
 
 ---
 
@@ -29,7 +29,8 @@
 16. [Non-Functional Requirements](#16-non-functional-requirements)
 17. [Security Requirements](#17-security-requirements)
 18. [Future Roadmap](#18-future-roadmap)
-19. [Appendices](#19-appendices)
+19. [Backend Architecture & Fleet Orchestration (Architecture Addendum)](#19-backend-architecture--fleet-orchestration-architecture-addendum)
+20. [Appendices](#20-appendices)
 
 ---
 
@@ -43,6 +44,7 @@ This document is maintained as the single source of truth for Parcel Pilot's fun
 | 0.5 | — | Product Owner | Introduced Network as top-level entity; fleet-centric pivot |
 | 0.8 | — | Product Owner | RBAC, task lifecycle, map versioning, Firestore decisions finalized |
 | 1.0 | 12 Jul 2026 | Product Owner | Baseline frozen. UUID strategy and common entity metadata standardized. |
+| 1.1 | 15 Jul 2026 | Product Owner | Post-freeze Architecture Addendum integrated: FastAPI Fleet Orchestrator backend, Vehicle Client abstraction (Unity/Arduino/future ESP32/Raspberry Pi), Driver/RL split (training vs. inference), Fleet Manager module, two-tier Vehicle Identity, formal Communication Protocol packet types, repository structure, structured logging, and environment-based configuration. Manual Control is now restricted to Admin users only (amends Section 6). See Section 19 and Appendix C.1 for full detail. |
 
 > **Note:** This SRS is intentionally structured to be implementation-ready: every functional statement in this document is expected to map directly to a Firestore collection, a screen, or a backend endpoint.
 
@@ -58,11 +60,11 @@ This Software Requirements Specification (SRS) defines the complete functional, 
 
 Parcel Pilot is a fleet-centric, multi-tenant platform that lets organizations ("Networks") register autonomous or semi-autonomous vehicles, organize users under role-based permissions, assign delivery/transport tasks to vehicles, maintain a live and historical map of vehicle activity, and observe a shared activity feed of everything happening inside the network. The system is composed of three cooperating parts:
 
-- A React Native (TypeScript) mobile application for Android and tablets — the Parcel Pilot Interface.
-- A backend service (deployed on Render) that mediates all communication between the application, Firebase, and vehicles.
-- Vehicle firmware and an out-of-scope Reinforcement Learning (RL) engine, written in Python, that provides autonomous navigation, obstacle avoidance, and task optimization. The RL/path-planning intelligence itself is explicitly outside the scope of this SRS; the application only issues commands and displays vehicle state.
+- A React Native (TypeScript) mobile application for Android and tablets — the Parcel Pilot Interface — which authenticates directly against Firebase and reads most business data directly from Firestore.
+- A Python **FastAPI** backend — the **Fleet Orchestrator** — deployed via Docker/Uvicorn, that owns vehicle connection management, fleet orchestration, request arbitration, ETA calculation, manual control sessions, command dispatch, telemetry broadcast, and Firestore synchronization where required. Per the Architecture Addendum (Section 19), the backend is not a simple request proxy; it is the system's central orchestration layer.
+- Vehicle firmware/clients and a Driver/RL layer, written in Python, that provide autonomous navigation, obstacle avoidance, and task optimization. For V1.0, RL/planning **inference** executes inside the FastAPI backend (Arduino Uno cannot run modern planning algorithms onboard); RL **training** is a fully separate, out-of-scope offline process. The application only issues commands and displays vehicle state — it never performs planning itself.
 
-The vehicle hardware target for the initial release is an Arduino Uno equipped with Bluetooth and/or WiFi connectivity, GPS, and a set of sensors (initially IR and UV, designed for future expansion). Vehicles may be physical or fully simulated, with the application treating both identically at the interface level.
+The vehicle hardware target for the initial release is an Arduino Uno equipped with Bluetooth and/or WiFi connectivity, GPS, and a set of sensors (initially IR and UV, designed for future expansion). Vehicles may be physical or fully simulated (via a Unity simulation client), with the application — and the backend — treating both identically at the interface level as uniform **Vehicle Clients** (see Section 19.5).
 
 ### 2.3 Intended Audience
 
@@ -88,6 +90,13 @@ The vehicle hardware target for the initial release is an Arduino Uno equipped w
 | RBAC | Role-Based Access Control, implemented internally as permission-based roles. |
 | RL | Reinforcement Learning — the Python-based intelligence layer that plans vehicle paths and task execution outside this application. |
 | UUID | Universally Unique Identifier, generated for every major entity independent of the Firestore document ID. |
+| Fleet Orchestrator | The FastAPI backend's role as the system's central coordination layer — not merely a request proxy. See Section 19. |
+| Vehicle Client | Any connected entity that executes vehicle commands and reports telemetry — a Unity simulation, an Arduino vehicle, or a future ESP32/Raspberry Pi device — all treated uniformly by the backend. |
+| Driver | The backend module that converts high-level Task objectives into low-level Vehicle Commands (Task → Destination → Planner → Driver → Vehicle Commands). |
+| Fleet Manager | The backend module responsible for vehicle allocation, request queueing, availability tracking, ETA calculation, and request arbitration. |
+| Hardware Identity | A Vehicle's physical identifier (Bluetooth MAC, MCU Chip ID, Device Serial), used only during registration and pairing. |
+| Vehicle UUID / Application Identity | The stable identifier all application and backend logic references for a Vehicle, independent of its Hardware Identity. |
+| Heartbeat | A periodic signal sent by a Vehicle Client to the backend confirming it is connected and reachable. |
 
 ### 2.5 References
 
@@ -127,14 +136,36 @@ Parcel Pilot exists to make it trivially easy for any organization to operate a 
 
 ### 4.1 High-Level Architecture
 
-Parcel Pilot follows a three-tier architecture: a React Native client, a Render-hosted backend mediation service, and Firebase (Authentication + Firestore) as the system of record. Vehicles communicate through the backend for registration, task assignment, and network messaging, and may also communicate directly with the phone over Bluetooth/WiFi for low-latency manual control and telemetry, per the Communication Protocol defined in Section 11.
+**This section is superseded and refined by the Architecture Addendum (Section 19); it is restated here in full so Section 4 remains a complete, standalone system overview.**
+
+Parcel Pilot follows a four-tier architecture: a React Native client, a Python **FastAPI Fleet Orchestrator** backend, Firebase (Authentication + Firestore) as the persistent system of record, and a Vehicle Communication Layer connecting to uniform Vehicle Clients (Unity simulation or Arduino hardware today; ESP32/Raspberry Pi in the future). The application authenticates directly against Firebase and reads most business data directly from Firestore; the backend is engaged specifically when orchestration, realtime communication, or autonomous decision-making is required — it does not replace Firebase Authentication or Firestore.
+
+```
+React Native App
+(UI + Firebase Auth + Firestore)
+        │
+   REST + WebSocket
+        │
+FastAPI Fleet Orchestrator
+├── Vehicle Manager
+├── Fleet Manager
+├── Driver / RL Engine
+└── State Synchronization
+        │
+Vehicle Communication Layer
+        │
+   ┌────────────┬─────────────┐
+   │                          │
+Unity Client              Arduino Client
+```
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Client | React Native + TypeScript (Android, Tablet) | All user-facing screens; renders Dark/Light themed, role-aware UI; issues commands; displays live + historical state. |
-| Backend | Node/Render-hosted service | Mediates app ↔ Firebase ↔ vehicle communication; enforces business rules not expressible in Firestore Security Rules; manages broadcast messaging and notification fan-out. |
-| Data & Auth | Firebase Authentication (Google Sign-In) + Cloud Firestore | System of record for Users, Networks, Vehicles, Tasks, Maps, Roles, Activity, Notifications; enforces RBAC via Security Rules. |
-| Vehicle | Arduino Uno (real) or Simulator | Executes commands, reports sensor/telemetry/state data, connects via Bluetooth/WiFi; hosts the RL/path-planning logic (Python), which is out of scope for this SRS. |
+| Client | React Native + TypeScript (Android, Tablet) | All user-facing screens; renders Dark/Light themed, role-aware UI; authenticates via Firebase; reads most business data directly from Firestore; sends requests/commands to the backend; displays live + historical state and telemetry. Does not make fleet decisions. |
+| Backend (Fleet Orchestrator) | Python + FastAPI, deployed via Docker/Uvicorn (e.g. on Render) | Owns vehicle connection management, the WebSocket server, Driver/RL inference, fleet orchestration, vehicle request arbitration, ETA calculation, manual control sessions, command dispatch, telemetry broadcast, vehicle heartbeat monitoring, event persistence, and Firestore synchronization where required. See Section 19 for full detail. |
+| Data & Auth | Firebase Authentication (Google Sign-In) + Cloud Firestore | Authentication provider and persistent source of truth for Users, Networks, Vehicles, Tasks, Maps, Roles, History, Notifications, Analytics, and Activity Feed. Unchanged by the Addendum. |
+| Vehicle Communication Layer | REST + WebSocket, one uniform protocol | Connects the backend to every Vehicle Client using an identical packet structure (Register, Heartbeat, Telemetry, Event, Command Acknowledgement) regardless of implementation. See Section 19.13. |
+| Vehicle Client | Unity Simulation, Arduino Uno (real), future ESP32/Raspberry Pi | Lightweight execution only: movement commands, sensor reads, motor control, encoder reading, telemetry generation, heartbeat, command acknowledgement. Never contains fleet management, arbitration, scheduling, RL, or planning logic. |
 
 ### 4.2 Entity Hierarchy
 
@@ -162,9 +193,9 @@ System
 
 ### 4.4 Key Non-Goals (Explicitly Out of Scope)
 
-- Path-planning, obstacle avoidance, and task-optimization intelligence (the RL engine) — the application only sends commands and receives state/telemetry.
-- The real-world negotiation between vehicles over which one accepts a "call" request — handled outside the application by the vehicle/RL layer; the application is only responsible for detecting and resolving deadlock conditions at the request level.
-- Physical fleet dispatch hardware beyond the Arduino Uno target for V1.
+- RL **training** (datasets, experiments, notebooks) — this lives entirely under `rl/` in the repository and is out of scope for this SRS; only RL **inference** (the Driver, converting objectives into commands) is an in-scope backend component for V1.0. See Section 19.7.
+- The real-world negotiation between vehicles over which one accepts a "call" request beyond the backend's own Fleet Manager arbitration and Driver route evaluation — described functionally in Section 19.10, not re-derived here.
+- Physical fleet dispatch hardware beyond the Arduino Uno (and Unity simulation) target for V1; ESP32 and Raspberry Pi Vehicle Clients are future roadmap items (Section 18).
 
 ---
 
@@ -205,6 +236,22 @@ Each requirement below is uniquely identified (FR-n) for traceability into test 
 | FR-29 | The system shall attach standardized metadata (createdAt, createdBy, updatedAt, updatedBy, isDeleted, status, version) to every major entity. |
 | FR-30 | When internet connectivity is lost, the system shall stop all operation (no offline Bluetooth-only manual control fallback), per the approved offline policy. |
 
+*The following requirements (FR-31 to FR-41) were added in the Architecture Addendum (v1.1) and are binding alongside FR-1 through FR-30. Where an addendum requirement narrows an earlier one (e.g., FR-37 narrows FR-16), the addendum requirement governs.*
+
+| ID | Requirement |
+|---|---|
+| FR-31 | The backend shall be implemented in Python using FastAPI and shall act as the system's Fleet Orchestrator, not merely a request proxy, owning vehicle connection management, orchestration, arbitration, ETA calculation, manual control sessions, command dispatch, telemetry broadcast, heartbeat monitoring, and event persistence. |
+| FR-32 | Firebase Authentication and Cloud Firestore shall remain, respectively, the system's authentication provider and persistent source of truth for Users, Networks, Vehicles, Tasks, Maps, Roles, History, Notifications, Analytics, and Activity Feed; the backend shall synchronize to Firestore where required but shall not replace it. |
+| FR-33 | The system shall treat every connected vehicle — Unity simulation, Arduino hardware, or any future Vehicle Client (e.g., ESP32, Raspberry Pi) — as a uniform Vehicle Client, with no simulator-vs-hardware branching in backend business logic. |
+| FR-34 | Vehicle Clients shall be limited to lightweight execution responsibilities (movement commands, sensor reads, motor control, encoder reading, telemetry generation, heartbeat, command acknowledgement) and shall not implement fleet management, request arbitration, task scheduling, user logic, RL, path planning, or ETA calculation. |
+| FR-35 | For V1.0, all Driver/RL inference (converting Task objectives into low-level Vehicle Commands) shall execute inside the FastAPI backend; RL training shall remain a fully separate, offline process outside the runtime system. |
+| FR-36 | The backend shall provide a Fleet Manager module responsible for vehicle allocation, request queueing, vehicle availability tracking, ETA calculation, arbitration between competing requests, and manual-control preemption. |
+| FR-37 | Manual Control shall be restricted to Admin users only. Activating Manual Control shall immediately pause autonomous execution and grant the Admin an exclusive backend-managed control session; ending the session shall resume the prior Driver operation where possible. (This requirement narrows FR-16/FR-17 and Section 6's general canManualControl permission for V1.0.) |
+| FR-38 | Every Vehicle Client shall implement exactly one communication protocol, comprising Register, Heartbeat, Telemetry, Event, and Command Acknowledgement packet types transported over REST + WebSocket, with an identical packet structure regardless of implementation. |
+| FR-39 | Every Vehicle shall carry two identifiers: a Hardware Identity (Bluetooth MAC, MCU Chip ID, or Device Serial), used only during registration and pairing, and an Application Identity (Vehicle UUID), which all application and backend logic shall reference exclusively thereafter. |
+| FR-40 | The system shall implement structured logging from the beginning for key fleet events, including at minimum: Vehicle Connected, Vehicle Disconnected, Task Assigned, Task Accepted, Task Completed, Task Failed, Vehicle Requested, Manual Control Started, Manual Control Ended, Emergency Stop, and Battery Low. |
+| FR-41 | Backend configuration shall be sourced from environment variables with separated runtime configurations; hardcoded configuration values shall be avoided. |
+
 ---
 
 ## 6. User Roles & Permission Model
@@ -233,7 +280,7 @@ Rather than hardcoding named roles such as "Operator" or "Admin" into applicatio
 | canRollbackMap | Restore a previous Map version. |
 | canRegisterVehicle | Add a new Vehicle to the SuperAdmin Ecosystem. |
 | canAssignVehicle | Assign an Ecosystem Vehicle to this Network. |
-| canManualControl | Take manual/remote control of a Vehicle. |
+| canManualControl | Take manual/remote control of a Vehicle. **Per the Architecture Addendum (Section 19.11), this permission is granted to the Admin role only in V1.0** — no custom Role may be granted this permission until a future release revisits this restriction. |
 | canViewAnalytics | View Vehicle/Task/Network analytics dashboards. |
 | canEditNetwork | Edit Network settings/metadata. |
 | canInviteUsers | Invite new Users into the Network. |
@@ -253,6 +300,7 @@ Conceptually: a Role document holds an array of Permission keys; a User's member
 - Task cancellation is permitted by default for the task's creator, any Admin, and the SuperAdmin; broader access is governed by canCancelTask for custom Roles.
 - Vehicle registration requires canRegisterVehicle; no SuperAdmin approval step is required post-registration.
 - Activity Feed and Analytics are Admin-only by default (canViewActivityFeed, canViewAnalytics), extendable to other Roles at the Admin's discretion.
+- **Manual Control is restricted to Admin users only in V1.0** (Architecture Addendum, Section 19.11) and is not extendable to custom Roles via canManualControl at this time — unlike the other permissions above, this is a hard restriction, not a default that Admins can loosen.
 
 ---
 
@@ -277,9 +325,13 @@ Vehicle onboarding is Admin-initiated and does not require SuperAdmin approval:
 
 ### 7.3 Vehicle Availability & Session Handling
 
-- Multiple Users within a Network may attempt to assign Tasks to the same Vehicle; the Vehicle/queueing layer determines execution order.
-- If a User calls a specific Vehicle that is currently occupied, the system surfaces an estimated time until the Vehicle can respond; if the User remains "on the way," the Vehicle (via its out-of-application logic) may still accept the request.
-- If a User requests the nearest/most optimal free Vehicle, that selection is resolved outside the application (vehicle/RL layer), but the application is responsible for detecting and breaking any deadlock (e.g., two Vehicles both electing to defer, or two requests racing for the same Vehicle) so the User is never left without a resolution.
+**Refined by the Architecture Addendum:** vehicle availability, queueing, and arbitration are now formally owned by the backend's **Fleet Manager** module (Section 19.8), rather than being resolved by vehicle-side logic outside the application. The two request flows are:
+
+- **Nearest Vehicle Request:** User → Backend → Fleet Manager → best Vehicle selected → Driver → Vehicle.
+- **Specific Vehicle Request:** User → Backend → Fleet Manager → Driver evaluates the Vehicle's current route → Accept or Reject with an ETA → response returned to the User.
+- Multiple Users within a Network may attempt to assign Tasks to the same Vehicle; the Fleet Manager's queueing logic determines execution order.
+- If a User calls a specific Vehicle that is currently occupied, the Fleet Manager/Driver surfaces an estimated time until the Vehicle can respond; acceptance logic executes entirely in the backend (not on the vehicle itself, and not outside the application as originally scoped in SRS v1.0).
+- If a User requests the nearest/most optimal free Vehicle, the Fleet Manager performs the selection; deadlock conditions between competing requests are still detected and resolved by the application, now specifically within the Fleet Manager module.
 
 ### 7.4 Multi-User Shared Visibility
 
@@ -381,7 +433,7 @@ Mode and State are tracked independently. Mode describes the operating paradigm 
 
 ### 10.2 Vehicle Command System
 
-Manual control is never exposed as raw movement buttons; the UI issues discrete, well-defined Commands, which keeps the Vehicle-side firmware/RL contract stable regardless of UI changes.
+Manual control is never exposed as raw movement buttons; the UI issues discrete, well-defined Commands, which keeps the Vehicle-side firmware/RL contract stable regardless of UI changes. Per the Architecture Addendum, these Commands are the output of the backend's **Driver** module, which converts a high-level objective into low-level Vehicle Commands: **Task → Destination → Planner → Driver → Vehicle Commands** (Section 19.7). Vehicle Clients only execute the Commands they receive; they never plan routes themselves.
 
 | Command | Description |
 |---|---|
@@ -406,6 +458,19 @@ The system retains, per Vehicle: Task history, travel history, distance travelle
 ### 10.5 Sensor Extensibility
 
 The initial sensor set is IR and UV, but the data model and UI are built to be dynamic: any future sensor (Temperature, Humidity, Lidar, Ultrasonic, GPS, Encoder, Custom) can be added without hardcoding, by registering a new sensor type against the Vehicle's sensor profile.
+
+### 10.6 Vehicle Client Model & Identity (Architecture Addendum)
+
+Every connected vehicle — whether a Unity simulation, an Arduino Uno, or a future ESP32/Raspberry Pi device — is treated by the backend as a uniform **Vehicle Client**. No `isSimulator` branching exists anywhere in backend business logic; all Vehicle Clients implement the same communication protocol (Section 11.5) and are indistinguishable to the Fleet Manager and Driver.
+
+Every Vehicle carries exactly two identifiers:
+
+| Identifier | Examples | Usage |
+|---|---|---|
+| Hardware Identity | Bluetooth MAC, MCU Chip ID, Device Serial | Used only during registration and pairing (Section 7.2). |
+| Application Identity (Vehicle UUID) | vehicleId (UUID) | Referenced exclusively by all application and backend logic after registration; never the Hardware Identity. |
+
+Vehicle Clients are intentionally lightweight and must **not** contain fleet management, request arbitration, task scheduling, user logic, RL, path planning, or ETA calculation — all of that lives in the backend (Section 19.6).
 
 ---
 
@@ -434,6 +499,20 @@ Network messaging is broadcast-only in V1.0: every Network automatically has one
 
 If internet connectivity is lost, the system stops all operation — there is no Bluetooth-only manual-control fallback in V1.0. This is a deliberate simplification to avoid divergent state between the app, backend, and Firestore while offline.
 
+### 11.5 Vehicle Communication Protocol (Architecture Addendum)
+
+Exactly one communication protocol exists for the Vehicle Communication Layer, transported over REST + WebSocket. Every Vehicle Client — regardless of whether it is a Unity simulation, an Arduino Uno, or a future ESP32/Raspberry Pi client — implements the identical packet structure:
+
+| Packet Type | Purpose |
+|---|---|
+| Register | Vehicle Client announces itself to the backend using its Hardware Identity, initiating pairing/registration. |
+| Heartbeat | Periodic signal confirming the Vehicle Client is connected and reachable; monitored by the backend's heartbeat monitoring. |
+| Telemetry | Ongoing sensor, position, and status data streamed from the Vehicle Client to the backend. |
+| Event | Discrete occurrences (e.g., obstruction detected, battery threshold crossed) reported asynchronously. |
+| Command Acknowledgement | Vehicle Client's confirmation that a dispatched Command (Section 10.2) was received and/or executed. |
+
+Protocol definitions, packet schemas, and shared specifications are maintained centrally under `shared/protocol/`, `shared/schemas/`, and `shared/constants/` in the repository (Section 19.15), so every Vehicle Client implementation — present or future — stays consistent with a single contract.
+
 ---
 
 ## 12. Firebase Data Model
@@ -441,6 +520,8 @@ If internet connectivity is lost, the system stops all operation — there is no
 ### 12.1 Platform Decision
 
 Cloud Firestore is the system of record, chosen over the Realtime Database for its richer querying, cleaner document structure, easier RBAC via Security Rules, optional offline support, and better fit for structured entities like Users, Vehicles, Networks, and Tasks. Firebase Authentication (Google Sign-In only, for V1.0) is used alongside Firestore.
+
+**Per the Architecture Addendum (Section 19.4), this remains unchanged:** the FastAPI backend does not replace Firebase Authentication or Firestore. The React Native application continues to authenticate directly with Firebase and should read most business data directly from Firestore. The backend is engaged only when orchestration, realtime communication, or autonomous decision-making is required (vehicle connections, arbitration, Driver/RL inference, manual control sessions, command dispatch, telemetry) — writing back to Firestore for synchronization where needed.
 
 ### 12.2 UUID Strategy
 
@@ -479,7 +560,7 @@ Every collection listed below includes the following common fields on each docum
 
 ### 12.5 Security Rules Approach
 
-Firestore Security Rules enforce Network-scoped access (a User may only read/write documents belonging to Networks they are an active member of) and Permission-scoped writes (sensitive fields/collections check the caller's Role permissions via a server-side custom claim or a Firestore lookup). Cross-cutting checks that Security Rules cannot express cleanly (e.g., vehicle deadlock resolution, cross-network SuperAdmin operations) are performed by the Render backend using the Firebase Admin SDK.
+Firestore Security Rules enforce Network-scoped access (a User may only read/write documents belonging to Networks they are an active member of) and Permission-scoped writes (sensitive fields/collections check the caller's Role permissions via a server-side custom claim or a Firestore lookup). Cross-cutting checks that Security Rules cannot express cleanly (e.g., vehicle deadlock resolution, cross-network SuperAdmin operations, Fleet Manager arbitration) are performed by the FastAPI Fleet Orchestrator backend using the Firebase Admin SDK.
 
 ---
 
@@ -494,7 +575,7 @@ The table below enumerates the Version 1.0 screen inventory for the Parcel Pilot
 | Dashboard / Home | Live overview: fleet status, active Tasks, recent Activity Feed. |
 | Vehicle List | All Vehicles in the active Network with State/Mode badges. |
 | Vehicle Detail | Live telemetry, position, sensors, command controls, history tabs. |
-| Manual Control | Command-based remote control surface (Move/Stop/Pause/Resume/Return Home/E-Stop). |
+| Manual Control | Command-based remote control surface (Move/Stop/Pause/Resume/Return Home/E-Stop). **Admin-only in V1.0** per the Architecture Addendum (Section 19.11); the backend grants an exclusive control session and pauses autonomous execution while active. |
 | Call Vehicle | Call a specific Vehicle or request the nearest free Vehicle; shows ETA. |
 | Task Creation | Item details, pickup, drop-off location picker, priority selector. |
 | Task List / Queue | All Tasks in the active Network, filterable by state/priority. |
@@ -579,14 +660,15 @@ Active Task in progress → Vehicle reports battery loss, disconnect, or physica
 
 | Category | Requirement |
 |---|---|
-| Performance | Vehicle command round-trip (app → backend/Bluetooth → vehicle) should feel real-time for manual control (target sub-second UI feedback for command acknowledgment). |
+| Performance | Vehicle command round-trip (app → backend/Bluetooth → vehicle) should feel real-time for manual control (target sub-second UI feedback for command acknowledgment). The FastAPI Fleet Orchestrator's WebSocket connections and heartbeat monitoring must sustain concurrent Vehicle Client connections without degrading command dispatch or telemetry broadcast latency. |
 | Scalability | Firestore schema and backend must support multiple concurrent Networks, each with multiple Vehicles and Users, without cross-Network data leakage. |
 | Availability | Backend (Render) and Firebase should target standard cloud availability; the system fails safe (stop-all) when internet is unavailable rather than operating in an inconsistent partial-offline mode. |
 | Usability | Industrial, high-contrast UI usable one-handed or with gloves; Dark/Light themes both first-class. |
-| Auditability | Every entity carries createdAt/By, updatedAt/By, isDeleted, status, and version, enabling full audit trails and safe soft-deletes. |
+| Auditability | Every entity carries createdAt/By, updatedAt/By, isDeleted, status, and version, enabling full audit trails and safe soft-deletes. Structured logging (Section 19.16) of key fleet events supplements this at the backend/operations level. |
 | Portability | Use of UUIDs independent of Firestore document IDs keeps data portable to future storage or export formats. |
-| Maintainability | Command-based Vehicle control and generic Map Objects/Sensor types avoid hardcoding, easing future extension. |
-| Compatibility | Android phones and tablets as the V1.0 target; React Native + TypeScript codebase. |
+| Maintainability | Command-based Vehicle control, generic Map Objects/Sensor types, and the Vehicle Client abstraction (uniform treatment of simulation and hardware) avoid hardcoding, easing future extension. Backend organized by domain modules (communication/, vehicles/, fleet/, driver/, tasks/, maps/, notifications/, users/) rather than by technology (Section 19.15). |
+| Compatibility | Android phones and tablets as the V1.0 target; React Native + TypeScript codebase; Python/FastAPI backend deployable via Docker/Uvicorn. |
+| Configurability | Backend configuration shall be environment-variable-driven with separated runtime configurations; no hardcoded values (Section 19.17). |
 
 ---
 
@@ -599,7 +681,8 @@ Authentication is provided by Firebase Authentication using Google Sign-In only 
 ### 17.2 Authorization
 
 - All sensitive reads/writes are scoped to the caller's active Network membership.
-- All sensitive actions (task assignment/cancellation, map editing, manual control, vehicle registration/assignment, user/role management, broadcast messaging, analytics/activity-feed viewing) are gated by the specific Permission keys defined in Section 6.3.
+- All sensitive actions (task assignment/cancellation, map editing, vehicle registration/assignment, user/role management, broadcast messaging, analytics/activity-feed viewing) are gated by the specific Permission keys defined in Section 6.3.
+- **Manual Control is restricted to Admin users only in V1.0** (Architecture Addendum, Section 19.11) and is enforced by the backend, which grants an exclusive control session, immediately pauses autonomous execution on activation, and resumes prior Driver operation on session end where possible — this is a backend-controlled hard restriction, not merely a Role default.
 - The SuperAdmin bypasses per-Network permission checks entirely and has unrestricted system-wide access, including the ability to transfer Network ownership.
 
 ### 17.3 Data Protection
@@ -609,8 +692,9 @@ Authentication is provided by Firebase Authentication using Google Sign-In only 
 
 ### 17.4 Vehicle Communication Security
 
-- Vehicle pairing requires a unique hardware identifier (Bluetooth ID) and an explicit Admin-initiated registration step.
+- Vehicle pairing requires a Hardware Identity (Bluetooth MAC, MCU Chip ID, or Device Serial) and an explicit Admin-initiated registration step; the Application Identity (Vehicle UUID) is used for all logic thereafter (Section 10.6).
 - Command issuance to a Vehicle is authenticated and permission-checked before being relayed by the backend or sent directly over Bluetooth/WiFi.
+- The backend continuously monitors Vehicle Client heartbeats to detect disconnection promptly, and treats all Vehicle Clients (Unity simulation or physical hardware) identically for security purposes — there is no reduced-security "simulator mode."
 
 ### 17.5 Notification Security
 
@@ -631,12 +715,301 @@ The following items are intentionally deferred from V1.0 but are reserved as hid
 - SuperAdmin approval gating for Vehicle registration, if stricter governance is later required.
 - Task lifecycle enrichment with automatic Pause/Retry/Waiting states on recoverable Vehicle failures (V1.0 always fails the Task outright).
 - Deeper RL integration hooks — richer telemetry contracts to support increasingly autonomous fleet coordination.
+- Additional Vehicle Client implementations (ESP32, Raspberry Pi) built against the same uniform communication protocol (Section 19.13/11.5), requiring no backend logic changes.
+- Extending canManualControl beyond the Admin-only V1.0 restriction to permitted custom Roles, once manual-control governance requirements are revisited.
+- Evolving Driver/RL inference from fully backend-hosted (V1.0) toward partially distributed/edge inference as vehicle hardware capability grows.
 
 > **Note:** These roadmap items are explicitly non-binding for V1.0 sign-off and exist to guide forward-compatible schema and navigation decisions only.
 
 ---
 
-## 19. Appendices
+## 19. Backend Architecture & Fleet Orchestration (Architecture Addendum)
+
+> This chapter incorporates, in full, the *Parcel Pilot Architecture Addendum (Post SRS v1.0)* — all architectural decisions, refinements, and clarifications agreed after the SRS v1.0 freeze. It is read alongside, and supersedes where noted, the relevant subsections of Sections 4, 6, 7, 10, 11, 12, and 17 above.
+
+### 19.1 Backend Technology Decision
+
+The backend is implemented entirely in **Python** using **FastAPI**. This decision was made for the following reasons:
+
+- Native async support
+- REST + WebSocket support
+- Easy integration with the Firebase Admin SDK
+- Shares an ecosystem with the RL implementation
+- Easy deployment using Docker/Uvicorn
+- Clean, modular architecture
+
+The backend is **not** merely a request proxy. It acts as the **Fleet Orchestrator** — the system's central coordination layer for every Vehicle Client, Task, and manual control session.
+
+### 19.2 Revised System Architecture
+
+```
+React Native App
+(UI + Firebase Auth + Firestore)
+        │
+   REST + WebSocket
+        │
+FastAPI Fleet Orchestrator
+├── Vehicle Manager
+├── Fleet Manager
+├── Driver / RL Engine
+└── State Synchronization
+        │
+Vehicle Communication Layer
+        │
+   ┌────────────┬─────────────┐
+   │                          │
+Unity Client              Arduino Client
+```
+
+### 19.3 Backend Responsibilities
+
+The FastAPI backend owns:
+
+- Vehicle connection management
+- WebSocket server
+- Driver / RL inference
+- Fleet orchestration
+- Vehicle request arbitration
+- ETA calculation
+- Manual control sessions
+- Command dispatch
+- Telemetry broadcast
+- Vehicle heartbeat monitoring
+- Event persistence
+- Firestore synchronization where required
+
+The backend **does not** replace Firebase Authentication or Firestore.
+
+### 19.4 Firebase Responsibilities
+
+Firebase Authentication remains the authentication provider. The React Native application continues to authenticate users directly using Firebase.
+
+Firestore remains the persistent source of truth for:
+
+- Users
+- Networks
+- Vehicles
+- Tasks
+- Maps
+- Roles
+- History
+- Notifications
+- Analytics
+- Activity Feed
+
+The application should read most business data directly from Firestore. FastAPI should only be involved when orchestration, realtime communication, or autonomous decision-making is required.
+
+### 19.5 Vehicle Philosophy
+
+The backend never distinguishes between simulator and physical hardware. Every connected entity is simply a **Vehicle Client**. Examples:
+
+- Unity Simulation
+- Arduino Vehicle
+- Future ESP32
+- Future Raspberry Pi
+
+All implement the same communication protocol. No `isSimulator` branching should exist inside backend business logic.
+
+### 19.6 Vehicle Responsibilities
+
+Vehicle Clients are intentionally lightweight.
+
+**Responsibilities:**
+
+- Execute movement commands
+- Read sensors
+- Motor control
+- Encoder reading
+- Telemetry generation
+- Heartbeat
+- Command acknowledgement
+
+**Vehicle Clients should NOT contain:**
+
+- Fleet management
+- Request arbitration
+- Task scheduling
+- User logic
+- RL
+- Path planning
+- ETA calculation
+
+### 19.7 Driver / RL
+
+**V1 Decision:** Because the Arduino Uno cannot execute modern RL or planning algorithms, all intelligence executes inside FastAPI.
+
+Training lives in: `root/rl/`
+
+Inference lives inside: `root/backend/`
+
+The backend converts high-level objectives into low-level vehicle commands:
+
+**Task → Destination → Planner → Driver → Vehicle Commands**
+
+### 19.8 Fleet Manager
+
+A Fleet Manager module is introduced. Responsibilities:
+
+- Vehicle allocation
+- Vehicle request handling
+- Queue management
+- Vehicle availability
+- ETA calculation
+- Arbitration
+- Request acceptance logic
+- Manual control preemption
+
+### 19.9 User Interaction Model
+
+Users do **NOT** control vehicles directly. Users can:
+
+- Request nearest available vehicle
+- Request a specific vehicle
+- Create tasks
+- Monitor fleet state
+- Observe telemetry
+- Observe task progress
+
+Vehicles operate autonomously.
+
+### 19.10 Vehicle Request Flow
+
+**Nearest Vehicle Request**
+
+User → Backend → Fleet Manager → Best Vehicle selected → Driver → Vehicle
+
+**Specific Vehicle Request**
+
+User → Backend → Fleet Manager → Driver evaluates current route → Accept or Reject with ETA → Response returned
+
+Acceptance logic executes in the backend.
+
+### 19.11 Manual Control
+
+Only Admin users may enter Manual Control. Manual Control has the highest priority.
+
+**When Manual Control begins:**
+
+- Autonomous execution pauses immediately
+- The current driver relinquishes control
+- The backend grants an exclusive session
+- Commands originate only from the Admin
+
+**When Manual Control ends:**
+
+- The Driver resumes previous operation if possible
+
+Manual Control is backend-controlled.
+
+### 19.12 Application Responsibilities
+
+React Native is responsible for:
+
+- UI
+- Authentication flow
+- Firestore reads
+- Local validation
+- Vehicle visualization
+- Maps
+- Task creation
+- Sending requests
+- Displaying telemetry
+
+The application does **not** make fleet decisions.
+
+### 19.13 Communication Protocol
+
+Exactly one protocol exists. Every Vehicle Client implements:
+
+- Register
+- Heartbeat
+- Telemetry
+- Event
+- Command Acknowledgement
+
+Packet structure remains identical regardless of implementation. (Detailed per-packet-type purpose is given in Section 11.5.)
+
+### 19.14 Vehicle Identity
+
+Every vehicle owns two identifiers.
+
+**Hardware Identity** — examples: Bluetooth MAC, MCU Chip ID, Device Serial.
+
+**Application Identity** — the Vehicle UUID.
+
+Application logic always references the Vehicle UUID. Hardware IDs are used only during registration and pairing.
+
+### 19.15 Repository Structure
+
+```
+root/
+
+application/
+└── ParcelPilotApp/
+
+backend/
+
+firmware/
+
+rl/
+
+simulation/
+└── unity/
+
+shared/
+
+infra/
+
+tools/
+```
+
+| Directory | Contents |
+|---|---|
+| application/ | React Native application. |
+| backend/ | FastAPI Fleet Orchestrator. Suggested domains: communication/, vehicles/, fleet/, driver/, tasks/, maps/, notifications/, users/. Avoid organizing primarily by technology. |
+| firmware/ | Vehicle firmware, e.g. arduino/ and shared/. |
+| rl/ | Contains only training, datasets, experiments, and notebooks. No runtime inference. |
+| simulation/ | Unity project. Unity acts only as a Vehicle Client. |
+| shared/ | Recommended project-wide contract: protocol/, schemas/, constants/, docs/. Stores protocol definitions, packet schemas, and shared specifications. |
+| infra/ | Deployment assets, e.g. Dockerfiles, docker-compose, deployment scripts. |
+| tools/ | Developer utilities. |
+
+### 19.16 Logging
+
+Structured logging should exist from the beginning. Important events include:
+
+- Vehicle Connected
+- Vehicle Disconnected
+- Task Assigned
+- Task Accepted
+- Task Completed
+- Task Failed
+- Vehicle Requested
+- Manual Control Started
+- Manual Control Ended
+- Emergency Stop
+- Battery Low
+
+### 19.17 Configuration
+
+Backend configuration should use environment variables and separated runtime configurations. Hardcoded values should be avoided.
+
+### 19.18 Architectural Principles
+
+1. Backend is the Fleet Orchestrator.
+2. Firestore is the persistent source of truth.
+3. Firebase Authentication remains the authentication provider.
+4. React Native is responsible for presentation and user interaction.
+5. Backend owns autonomous decision making.
+6. Vehicles remain lightweight execution devices.
+7. Simulator and hardware are treated identically.
+8. One protocol for every vehicle implementation.
+9. Training and inference remain separated.
+10. Modular design is preferred over technology-centric organization.
+
+---
+
+## 20. Appendices
 
 ### Appendix A — Glossary
 
@@ -661,7 +1034,7 @@ The following decisions were explicitly confirmed by the Product Owner during re
 - Single SuperAdmin ownership per Network; multiple Admins permitted per Network.
 - Vehicle registration is Admin-initiated via Bluetooth ID pairing; no SuperAdmin approval required.
 - A Vehicle belongs to exactly one Network at a time, but exists in the SuperAdmin's Ecosystem prior to/between assignments.
-- Vehicle-to-User call negotiation and free-vehicle selection are handled outside the application; the application only surfaces ETAs and resolves deadlocks.
+- Vehicle-to-User call negotiation and free-vehicle selection are handled outside the application; the application only surfaces ETAs and resolves deadlocks. **[Superseded by Appendix C.1 — this logic now lives in the backend's Fleet Manager, per the Architecture Addendum.]**
 - Tasks are owned by the Network, authored by a User, and assigned to a Vehicle.
 - Task priorities and cancellation permissions are Admin-configurable via RBAC, with sane defaults.
 - Vehicle failure during a Task always results in Failed status in V1.0 (no auto Pause/Retry).
@@ -672,10 +1045,27 @@ The following decisions were explicitly confirmed by the Product Owner during re
 - Activity Feed is Admin-only.
 - No connectivity fallback: the system stops entirely when internet is unavailable.
 - Dark and Light themes both ship in V1.0, managed from Settings alongside profile management.
-- Permission-based RBAC (not hardcoded roles) is used for all access control.
+- Permission-based RBAC (not hardcoded roles) is used for all access control. **[Refined by Appendix C.1 — canManualControl is restricted to Admin only in V1.0.]**
 - SuperAdmin has unrestricted, system-wide access including ownership transfer.
 - Cloud Firestore (not Realtime Database) is the system of record, paired with Firebase Authentication (Google Sign-In only).
 - Every major entity carries a UUID independent of its Firestore document ID, plus standardized createdAt/By, updatedAt/By, isDeleted, status, and version metadata.
+
+### Appendix C.1 — Addendum Decision Log (v1.1)
+
+The following decisions were confirmed in the post-freeze Architecture Addendum and are binding alongside Appendix C above; where they narrow or refine an original v1.0 decision, the addendum decision governs:
+
+- Backend is implemented in Python using FastAPI, and acts as the Fleet Orchestrator rather than a simple request proxy.
+- Firebase Authentication and Cloud Firestore remain unchanged: authentication provider and persistent source of truth, respectively; the backend engages only for orchestration, realtime communication, and autonomous decision-making.
+- Every connected vehicle (Unity simulation, Arduino, future ESP32/Raspberry Pi) is treated as a uniform Vehicle Client, with no simulator-vs-hardware branching in backend logic.
+- Vehicle Clients are lightweight execution-only devices; fleet management, arbitration, scheduling, RL, planning, and ETA calculation live entirely in the backend.
+- For V1.0, Driver/RL inference executes inside the FastAPI backend (Arduino Uno cannot run it onboard); RL training is a fully separate offline process under rl/.
+- A dedicated Fleet Manager backend module owns vehicle allocation, request queueing, availability, ETA calculation, arbitration, and manual-control preemption.
+- Manual Control is restricted to Admin users only in V1.0, is highest-priority, and is entirely backend-controlled (exclusive session grant, immediate autonomous pause, resume-on-end).
+- Exactly one communication protocol (Register, Heartbeat, Telemetry, Event, Command Acknowledgement over REST + WebSocket) is implemented identically by every Vehicle Client.
+- Every Vehicle carries two identifiers: a Hardware Identity (used only for registration/pairing) and an Application Identity/Vehicle UUID (used by all application and backend logic thereafter).
+- The repository is organized by domain (application/, backend/, firmware/, rl/, simulation/, shared/, infra/, tools/) rather than by technology, with the backend further split into communication/, vehicles/, fleet/, driver/, tasks/, maps/, notifications/, users/.
+- Structured logging of key fleet events (connect/disconnect, task lifecycle transitions, vehicle requests, manual control start/end, emergency stop, battery low) is implemented from the beginning.
+- Backend configuration is environment-variable-driven with separated runtime configurations; no hardcoded values.
 
 ### Appendix D — Sign-Off
 
@@ -688,4 +1078,4 @@ The following decisions were explicitly confirmed by the Product Owner during re
 
 ---
 
-*End of Document — Parcel Pilot SRS v1.0*
+*End of Document — Parcel Pilot SRS v1.1 (Baseline v1.0 + Architecture Addendum Integrated)*

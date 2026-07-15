@@ -19,3 +19,5 @@ application/ParcelPilotApp/android/app/build/
 
 # iOS
 application/ParcelPilotApp/ios/build/
+
+temp/
