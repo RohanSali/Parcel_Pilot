@@ -5,6 +5,7 @@ import { useNetworkStore } from '../store/networkStore';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { getFirestore, doc, getDoc } from '@react-native-firebase/firestore';
 import { RootStackParamList } from '../navigation/types';
 import { Plus, Users, Key, LogIn, CheckCircle, Bell, Settings as SettingsIcon } from 'lucide-react-native';
 import { Network } from '../models/Network';
@@ -18,6 +19,27 @@ export const DashboardScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const isSuperAdmin = user?.isSuperAdmin;
+  const [isEcosystemAdmin, setIsEcosystemAdmin] = useState(false);
+
+  React.useEffect(() => {
+    if (isSuperAdmin) {
+      setIsEcosystemAdmin(true);
+      return;
+    }
+    if (user?.ecosystemCode && user?.userId) {
+      const db = getFirestore();
+      getDoc(doc(db, 'ecosystems', user.ecosystemCode)).then(snap => {
+        if (snap.exists) {
+          const exists = typeof snap.exists === 'function' ? snap.exists() : snap.exists;
+          if (exists) {
+            const data = snap.data();
+            const role = data?.users?.[user.userId]?.role;
+            setIsEcosystemAdmin(role === 'Admin' || role === 'SuperAdmin');
+          }
+        }
+      }).catch(err => console.error(err));
+    }
+  }, [user, isSuperAdmin]);
 
   return (
     <View style={styles.mainContainer}>
@@ -54,6 +76,17 @@ export const DashboardScreen = () => {
             <Text style={styles.primaryButtonText}>Enter Networks Hub</Text>
           </TouchableOpacity>
         </View>
+
+        {isEcosystemAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Users and Roles</Text>
+            <Text style={{ color: colors.text.secondary, marginBottom: 16 }}>Manage custom roles and configure specific permissions for users in this ecosystem.</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('RolesManagement')}>
+              <Users color={colors.text.inverse} size={20} />
+              <Text style={styles.primaryButtonText}>Users and Roles</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -103,14 +136,6 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  adminCard: {
-    backgroundColor: 'rgba(255, 160, 0, 0.1)',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 160, 0, 0.3)',
   },
   cardTitle: {
     fontSize: 18,

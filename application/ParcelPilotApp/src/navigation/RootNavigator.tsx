@@ -21,7 +21,7 @@ import { ManualControlScreen } from '../screens/ManualControlScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { BroadcastMessagingScreen } from '../screens/BroadcastMessagingScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
-import { RolesPermissionsScreen } from '../screens/RolesPermissionsScreen';
+import { RolesManagementScreen } from '../screens/RolesManagementScreen';
 import { UserManagementScreen } from '../screens/UserManagementScreen';
 import { ManageNetworksScreen } from '../screens/ManageNetworksScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
@@ -65,7 +65,7 @@ export const RootNavigator = () => {
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="BroadcastMessaging" component={BroadcastMessagingScreen} />
           <Stack.Screen name="Analytics" component={AnalyticsScreen} />
-          <Stack.Screen name="RolesPermissions" component={RolesPermissionsScreen} />
+          <Stack.Screen name="RolesManagement" component={RolesManagementScreen} />
           <Stack.Screen name="UserManagement" component={UserManagementScreen} />
           <Stack.Screen name="ManageNetworks" component={ManageNetworksScreen} />
           <Stack.Screen name="Ecosystems" component={EcosystemsScreen} />

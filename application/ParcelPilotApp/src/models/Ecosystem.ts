@@ -19,7 +19,8 @@ export interface Ecosystem {
   ownerFirebaseUid: string;
   networks: Record<string, EcosystemNetwork>;
   users: Record<string, EcosystemUser>;
-  createdAt: number;
+  permissions?: Record<string, string[]>;
+  customRoles?: Record<string, string[]>;
 }
 
 export const ecosystemConverter = {
@@ -38,6 +39,8 @@ export const ecosystemConverter = {
       networks: data.networks || {},
       users: data.users || {},
       createdAt: data.createdAt || Date.now(),
+      permissions: data.permissions || {},
+      customRoles: data.customRoles || {},
     };
   },
 };

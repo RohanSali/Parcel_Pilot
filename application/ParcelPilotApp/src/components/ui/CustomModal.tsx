@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 export interface ModalAction {
@@ -46,53 +46,50 @@ export const CustomModal: React.FC<CustomModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <KeyboardAvoidingView 
-          style={styles.overlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <TouchableWithoutFeedback>
-            <View style={styles.modalContainer}>
-              {title && <Text style={styles.title}>{title}</Text>}
-              {message && <Text style={styles.message}>{message}</Text>}
-              
-              {customContent && (
-                <View style={styles.contentContainer}>
-                  {customContent}
-                </View>
-              )}
-
-              {children && (
-                <View style={styles.contentContainer}>
-                  {children}
-                </View>
-              )}
-
-              {actions && actions.length > 0 && (
-                <View style={styles.actionsContainer}>
-                  {actions.map((action, index) => {
-                    const actionStyle = getActionStyle(action.variant);
-                    return (
-                      <TouchableOpacity 
-                        key={index}
-                        style={[styles.actionButton, { backgroundColor: actionStyle.bg }]}
-                        onPress={() => {
-                          action.onPress();
-                          onClose();
-                        }}
-                      >
-                        <Text style={[styles.actionText, { color: actionStyle.text }]}>
-                          {action.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+      <KeyboardAvoidingView 
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.modalContainer}>
+          {title && <Text style={styles.title}>{title}</Text>}
+          {message && <Text style={styles.message}>{message}</Text>}
+          
+          {customContent && (
+            <View style={styles.contentContainer}>
+              {customContent}
             </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
+          )}
+
+          {children && (
+            <View style={styles.contentContainer}>
+              {children}
+            </View>
+          )}
+
+          {actions && actions.length > 0 && (
+            <View style={styles.actionsContainer}>
+              {actions.map((action, index) => {
+                const actionStyle = getActionStyle(action.variant);
+                return (
+                  <TouchableOpacity 
+                    key={index}
+                    style={[styles.actionButton, { backgroundColor: actionStyle.bg }]}
+                    onPress={() => {
+                      action.onPress();
+                      onClose();
+                    }}
+                  >
+                    <Text style={[styles.actionText, { color: actionStyle.text }]}>
+                      {action.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

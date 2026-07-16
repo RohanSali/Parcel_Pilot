@@ -31,7 +31,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   BroadcastMessaging: undefined;
   Analytics: undefined;
-  RolesPermissions: undefined;
+  RolesManagement: undefined;
   UserManagement: undefined;
   ManageNetworks: undefined;
   Profile: undefined;
