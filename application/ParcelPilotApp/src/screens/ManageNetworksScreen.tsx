@@ -6,7 +6,7 @@ import { useThemeColors } from '../hooks/useThemeColors';
 import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, setDoc } from '@react-native-firebase/firestore';
 import { EcosystemNetwork, EcosystemUser } from '../models/Ecosystem';
 import { CustomModal, ModalAction } from '../components/ui/CustomModal';
-import { ArrowLeft, Plus, Users, Key, LogIn, Edit2, Trash2, Clock } from 'lucide-react-native';
+import { ArrowLeft, Plus, Users, Key, LogIn, Edit2, Trash2, Clock, LogOut } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import NotificationService from '../services/NotificationService';
 
@@ -18,7 +18,7 @@ export const ManageNetworksScreen = () => {
   const { setActiveNetwork } = useNetworkStore();
 
   const [networks, setNetworks] = useState<Record<string, EcosystemNetwork>>({});
-  const [ecosystemUsers, setEcosystemUsers] = useState<Record<string, EcosystemUser & { displayName?: string }>>({});
+  const [ecosystemUsers, setEcosystemUsers] = useState<Record<string, EcosystemUser & { displayName?: string, userId: string }>>({});
   const [loading, setLoading] = useState(true);
   const [selectedEcosystemCode, setSelectedEcosystemCode] = useState<string>(
     user?.ecosystemCode || (user?.ecosystems?.length ? user.ecosystems[0] : '')
@@ -63,7 +63,7 @@ export const ManageNetworksScreen = () => {
         setNetworks(ecoData?.networks || {});
 
         const usersMap = ecoData?.users || {};
-        const populatedUsers: Record<string, EcosystemUser & { displayName?: string }> = {};
+        const populatedUsers: Record<string, EcosystemUser & { displayName?: string, userId: string }> = {};
         for (const [uid, u] of Object.entries(usersMap)) {
           const ecoUser = u as EcosystemUser;
           let displayName = 'Unknown User';
@@ -77,7 +77,7 @@ export const ManageNetworksScreen = () => {
           } catch (e) {
             console.warn('Failed to fetch name', e);
           }
-          populatedUsers[uid] = { ...ecoUser, displayName };
+          populatedUsers[uid] = { ...ecoUser, displayName, userId: uid };
         }
         setEcosystemUsers(populatedUsers);
       }
@@ -107,22 +107,22 @@ export const ManageNetworksScreen = () => {
       });
 
       // SuperAdmins/Admins are implicitly in it, but let's add it to their networks array for consistency
-      const userRef = doc(db, 'users', user.firebaseUid);
-      const userDocSnap = await getDoc(userRef);
-      const userData = userDocSnap.data();
-      const updatedNetworks = [...(userData?.ecosystems || [])]; // wait this is ecosystems. We need to update user's internal network state.
-      // Wait! the prompt says: "In ecosystems/eco_id/users/uid/networks/ store the network ids user is present in."
-      // So we update the ecosystem doc's user map!
-      await updateDoc(ecoRef, {
-        [`users.${user.userId}.networks`]: [...(ecosystemUsers[user.userId]?.networks || []), networkId]
+      const updates: any = {};
+      const chatAllowedUids: string[] = [];
+      Object.values(ecosystemUsers).forEach(u => {
+        if (u.role === 'SuperAdmin' || u.role === 'Admin' || u.userId === user.userId) {
+          updates[`users.${u.userId}.networks`] = [...(u.networks || []), networkId];
+          chatAllowedUids.push(u.firebaseUid);
+        }
       });
+      await updateDoc(ecoRef, updates);
 
       // Initialize the NetworkChat document
       const chatRef = doc(db, 'networkChats', networkId);
       await setDoc(chatRef, {
         networkId,
         ecosystemCode: selectedEcosystemCode,
-        allowedUids: [user.firebaseUid],
+        allowedUids: chatAllowedUids,
         createdAt: Date.now()
       });
 
@@ -268,6 +268,38 @@ export const ManageNetworksScreen = () => {
     }
   };
 
+  const handleRemoveMember = async (targetUserId: string, targetUid: string, networkId: string) => {
+    if (!selectedEcosystemCode) return;
+    try {
+      const db = getFirestore();
+      const ecoRef = doc(db, 'ecosystems', selectedEcosystemCode);
+      const targetNetworks = ecosystemUsers[targetUserId]?.networks || [];
+      const newNetworks = targetNetworks.filter(id => id !== networkId);
+      
+      // Optimistic UI update
+      setEcosystemUsers(prev => ({
+        ...prev,
+        [targetUserId]: {
+          ...prev[targetUserId],
+          networks: newNetworks
+        }
+      }));
+
+      await updateDoc(ecoRef, {
+        [`users.${targetUserId}.networks`]: newNetworks
+      });
+
+      const { arrayRemove } = require('@react-native-firebase/firestore');
+      const chatRef = doc(db, 'networkChats', networkId);
+      await updateDoc(chatRef, {
+        allowedUids: arrayRemove(targetUid)
+      });
+      
+    } catch (e) {
+      console.error('Failed to remove user', e);
+    }
+  };
+
   const handleInviteMember = async (targetUid: string, networkId: string, networkName: string) => {
     try {
       const db = getFirestore();
@@ -284,25 +316,16 @@ export const ManageNetworksScreen = () => {
       };
 
       await addDoc(notifsRef, newNotification);
-
-      // Show temporary success 
-      closeModal();
-      setTimeout(() => {
-        setModalConfig({
-          visible: true,
-          title: 'Invited',
-          message: 'User has been invited.',
-          actions: [{ label: 'OK', onPress: closeModal, variant: 'primary' }]
-        });
-      }, 500);
-
+      return true;
     } catch (error) {
       console.error('Failed to send invite', error);
+      return false;
     }
   };
 
   const InviteModalContent = ({ networkId, networkName, network }: { networkId: string, networkName: string, network: any }) => {
     const [timeLeft, setTimeLeft] = useState(0);
+    const [invitedUsers, setInvitedUsers] = useState<Record<string, boolean>>({});
 
     React.useEffect(() => {
       if (network?.joinCodeExpiresAt) {
@@ -347,11 +370,23 @@ export const ManageNetworksScreen = () => {
               <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: '500' }}>{u.displayName}</Text>
                 {isJoined ? (
-                  <View style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border }]}>
-                    <Text style={[styles.secondaryButtonText, { color: colors.text.secondary }]}>Joined</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <TouchableOpacity onPress={() => handleRemoveMember(u.userId, u.firebaseUid, networkId)}>
+                      <LogOut color={colors.danger} size={20} />
+                    </TouchableOpacity>
+                    <View style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border }]}>
+                      <Text style={[styles.secondaryButtonText, { color: colors.text.secondary }]}>Joined</Text>
+                    </View>
                   </View>
+                ) : invitedUsers[u.firebaseUid] ? (
+                  <Text style={{ color: colors.text.secondary, fontWeight: 'bold', fontStyle: 'italic', paddingRight: 16 }}>Invited</Text>
                 ) : (
-                  <TouchableOpacity style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6 }]} onPress={() => handleInviteMember(u.firebaseUid, networkId, networkName)}>
+                  <TouchableOpacity style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6 }]} onPress={async () => {
+                    const success = await handleInviteMember(u.firebaseUid, networkId, networkName);
+                    if (success) {
+                      setInvitedUsers(prev => ({ ...prev, [u.firebaseUid]: true }));
+                    }
+                  }}>
                     <Text style={styles.secondaryButtonText}>Invite</Text>
                   </TouchableOpacity>
                 )}
@@ -455,13 +490,7 @@ export const ManageNetworksScreen = () => {
     });
   };
 
-  if (loading && Object.keys(networks).length === 0) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+
 
   return (
     <View style={styles.container}>
@@ -506,7 +535,12 @@ export const ManageNetworksScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.buttonRow}>
           {isEcosystemAdmin && (
             <TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={showCreateNetworkModal}>
@@ -574,7 +608,8 @@ export const ManageNetworksScreen = () => {
           </TouchableOpacity>
         ))}
 
-      </ScrollView>
+        </ScrollView>
+      )}
 
       <CustomModal
         visible={modalConfig.visible}

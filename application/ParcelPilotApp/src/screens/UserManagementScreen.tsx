@@ -187,13 +187,7 @@ export const UserManagementScreen = () => {
     });
   };
 
-  if (loading && ecosystemUsers.length === 0) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+
 
   return (
     <View style={styles.container}>
@@ -204,8 +198,13 @@ export const UserManagementScreen = () => {
         <Text style={styles.headerTitle}>Manage Users</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.subtitle}>Ecosystem: {user?.ecosystemCode}</Text>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.subtitle}>Ecosystem: {user?.ecosystemCode}</Text>
 
         {ecosystemUsers.map((ecoUser, index) => (
           <View key={index} style={styles.userCard}>
@@ -244,7 +243,8 @@ export const UserManagementScreen = () => {
             )}
           </View>
         ))}
-      </ScrollView>
+        </ScrollView>
+      )}
       <CustomModal
         visible={modalConfig.visible}
         onClose={closeModal}

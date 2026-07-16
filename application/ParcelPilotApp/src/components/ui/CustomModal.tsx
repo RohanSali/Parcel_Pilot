@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from 'react-native';
 import { useThemeColors } from '../../hooks/useThemeColors';
 
 export interface ModalAction {
@@ -47,7 +47,10 @@ export const CustomModal: React.FC<CustomModalProps> = ({
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView 
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <TouchableWithoutFeedback>
             <View style={styles.modalContainer}>
               {title && <Text style={styles.title}>{title}</Text>}
@@ -88,7 +91,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({
               )}
             </View>
           </TouchableWithoutFeedback>
-        </View>
+        </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
     </Modal>
   );
