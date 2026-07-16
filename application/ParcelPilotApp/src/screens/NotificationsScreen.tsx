@@ -69,7 +69,7 @@ export const NotificationsScreen = () => {
     setLoading(true);
     try {
       const db = getFirestore();
-      
+
       const ecoRef = doc(db, 'ecosystems', notif.ecosystemId);
       const ecoSnap = await getDoc(ecoRef);
       const isExisting = typeof ecoSnap.exists === 'function' ? ecoSnap.exists() : ecoSnap.exists;
@@ -81,6 +81,13 @@ export const NotificationsScreen = () => {
           if (!currentNetworks.includes(notif.networkId)) {
             await updateDoc(ecoRef, {
               [`users.${user.userId}.networks`]: [...currentNetworks, notif.networkId]
+            });
+
+            // Add user to the network chat allowedUids
+            const { arrayUnion } = require('@react-native-firebase/firestore');
+            const chatRef = doc(db, 'networkChats', notif.networkId);
+            await updateDoc(chatRef, {
+              allowedUids: arrayUnion(user.firebaseUid)
             });
 
             // Need to get network name from ecoSnap or just use networkId.
@@ -128,7 +135,7 @@ export const NotificationsScreen = () => {
           </TouchableOpacity>
         )}
       </View>
-      
+
       {notifications.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>You have no new notifications.</Text>
@@ -144,7 +151,7 @@ export const NotificationsScreen = () => {
                 <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.message}>{item.message}</Text>
-              
+
               {item.type === 'NETWORK_INVITE' && (
                 <View style={styles.inviteActions}>
                   <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptInvite(item)}>
@@ -167,11 +174,11 @@ export const NotificationsScreen = () => {
 };
 
 const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: colors.background,
     padding: 20,
-    paddingTop: 60,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
   },
   headerContainer: {
     flexDirection: 'row',

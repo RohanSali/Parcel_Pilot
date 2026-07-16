@@ -26,13 +26,6 @@ export const NetworkDashboardScreen = () => {
         <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>Active Vehicles: 0</Text>
         <Text style={{ color: colors.text.secondary }}>Pending Tasks: 0</Text>
       </View>
-      
-      {activeNetwork.description ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Description</Text>
-          <Text style={{ color: colors.text.secondary }}>{activeNetwork.description}</Text>
-        </View>
-      ) : null}
     </ScrollView>
   );
 };

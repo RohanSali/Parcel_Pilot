@@ -42,7 +42,7 @@ export const SettingsScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Account</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.menuItem}
           onPress={() => navigation.navigate('Profile')}
         >
@@ -58,7 +58,7 @@ export const SettingsScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Appearance</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.menuItem}
           onPress={handleThemePress}
         >
@@ -75,7 +75,7 @@ export const SettingsScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Preferences</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.menuItem}
           onPress={() => navigation.navigate('Ecosystems')}
         >
@@ -115,7 +115,7 @@ export const SettingsScreen = () => {
           { label: 'System Default', onPress: () => setThemePreference('system'), variant: themePreference === 'system' ? 'primary' : 'secondary' },
           { label: 'Light Mode', onPress: () => setThemePreference('light'), variant: themePreference === 'light' ? 'primary' : 'secondary' },
           { label: 'Dark Mode', onPress: () => setThemePreference('dark'), variant: themePreference === 'dark' ? 'primary' : 'secondary' },
-          { label: 'Cancel', onPress: () => {}, variant: 'danger' }
+          { label: 'Cancel', onPress: () => { }, variant: 'danger' }
         ]}
       />
     </ScrollView>
@@ -131,7 +131,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 24,
-    paddingTop: 60,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
     paddingBottom: 16,
   },
   backButton: {

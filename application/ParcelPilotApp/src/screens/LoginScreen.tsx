@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
+import { CustomModal } from '../components/ui/CustomModal';
+import { AuthService } from '../services/auth/AuthService';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -13,6 +15,8 @@ export const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const { colors, isDark } = useThemeColors();
   const styles = createStyles(colors, isDark);
 
@@ -35,6 +39,20 @@ export const LoginScreen = () => {
       await signIn();
     } catch (error: any) {
       Alert.alert('Google Sign-In Failed', error.message || 'An error occurred.');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail) {
+      Alert.alert('Missing Field', 'Please enter your registered email address.');
+      return;
+    }
+    try {
+      await AuthService.sendPasswordReset(resetEmail);
+      setForgotPasswordVisible(false);
+      Alert.alert('Reset Link Sent', 'Please check your email for instructions to reset your password.');
+    } catch (error: any) {
+      Alert.alert('Reset Failed', error.message || 'Could not send reset link.');
     }
   };
 
@@ -83,6 +101,14 @@ export const LoginScreen = () => {
           <Text style={styles.linkText}>Don't have an account? Create one...</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity 
+          style={[styles.linkButton, { marginTop: -12 }]} 
+          onPress={() => setForgotPasswordVisible(true)}
+          disabled={loading}
+        >
+          <Text style={[styles.linkText, { color: colors.text.secondary }]}>Forgot Password?</Text>
+        </TouchableOpacity>
+
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>OR</Text>
@@ -97,6 +123,28 @@ export const LoginScreen = () => {
           <Text style={styles.googleButtonText}>Sign In with Google</Text>
         </TouchableOpacity>
       </View>
+
+      <CustomModal
+        visible={forgotPasswordVisible}
+        onClose={() => setForgotPasswordVisible(false)}
+        title="Reset Password"
+        message="Enter your registered email address to receive a password reset link."
+        customContent={
+          <TextInput
+            style={[styles.input, { marginTop: 12, width: '100%' }]}
+            placeholder="Email Address"
+            placeholderTextColor={colors.text.secondary}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            onChangeText={setResetEmail}
+            autoFocus
+          />
+        }
+        actions={[
+          { label: 'Cancel', onPress: () => setForgotPasswordVisible(false), variant: 'secondary' },
+          { label: 'Send Link', onPress: handleForgotPassword, variant: 'primary' }
+        ]}
+      />
     </KeyboardAvoidingView>
   );
 };

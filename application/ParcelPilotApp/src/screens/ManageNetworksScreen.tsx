@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useAuthStore } from '../store/authStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { getFirestore, doc, getDoc, updateDoc, collection, addDoc } from '@react-native-firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, setDoc } from '@react-native-firebase/firestore';
 import { EcosystemNetwork, EcosystemUser } from '../models/Ecosystem';
 import { CustomModal, ModalAction } from '../components/ui/CustomModal';
 import { ArrowLeft, Plus, Users, Key, LogIn, Edit2, Trash2, Clock } from 'lucide-react-native';
@@ -18,7 +18,7 @@ export const ManageNetworksScreen = () => {
   const { setActiveNetwork } = useNetworkStore();
 
   const [networks, setNetworks] = useState<Record<string, EcosystemNetwork>>({});
-  const [ecosystemUsers, setEcosystemUsers] = useState<Record<string, EcosystemUser>>({});
+  const [ecosystemUsers, setEcosystemUsers] = useState<Record<string, EcosystemUser & { displayName?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [selectedEcosystemCode, setSelectedEcosystemCode] = useState<string>(
     user?.ecosystemCode || (user?.ecosystems?.length ? user.ecosystems[0] : '')
@@ -49,6 +49,9 @@ export const ManageNetworksScreen = () => {
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setNetworks({});
+    setEcosystemUsers({});
     try {
       const db = getFirestore();
       const ecoRef = doc(db, 'ecosystems', selectedEcosystemCode);
@@ -58,7 +61,25 @@ export const ManageNetworksScreen = () => {
       if (isExisting) {
         const ecoData = ecoSnap.data();
         setNetworks(ecoData?.networks || {});
-        setEcosystemUsers(ecoData?.users || {});
+
+        const usersMap = ecoData?.users || {};
+        const populatedUsers: Record<string, EcosystemUser & { displayName?: string }> = {};
+        for (const [uid, u] of Object.entries(usersMap)) {
+          const ecoUser = u as EcosystemUser;
+          let displayName = 'Unknown User';
+          try {
+            const userRef = doc(db, 'users', ecoUser.firebaseUid);
+            const userSnap = await getDoc(userRef);
+            const isUserExisting = typeof userSnap.exists === 'function' ? userSnap.exists() : userSnap.exists;
+            if (isUserExisting) {
+              displayName = userSnap.data()?.displayName || 'Unknown User';
+            }
+          } catch (e) {
+            console.warn('Failed to fetch name', e);
+          }
+          populatedUsers[uid] = { ...ecoUser, displayName };
+        }
+        setEcosystemUsers(populatedUsers);
       }
     } catch (error) {
       console.error('Failed to fetch ecosystem networks', error);
@@ -68,7 +89,7 @@ export const ManageNetworksScreen = () => {
   };
 
   const handleCreateNetwork = async (networkName: string, networkDescription: string) => {
-    if (!selectedEcosystemCode || !networkName.trim()) return;
+    if (!selectedEcosystemCode || !networkName.trim() || !user) return;
     closeModal();
     setLoading(true);
     try {
@@ -80,7 +101,7 @@ export const ManageNetworksScreen = () => {
       };
 
       const db = getFirestore();
-      const ecoRef = doc(db, 'ecosystems', user.ecosystemCode);
+      const ecoRef = doc(db, 'ecosystems', selectedEcosystemCode);
       await updateDoc(ecoRef, {
         [`networks.${networkId}`]: newNetwork
       });
@@ -94,6 +115,15 @@ export const ManageNetworksScreen = () => {
       // So we update the ecosystem doc's user map!
       await updateDoc(ecoRef, {
         [`users.${user.userId}.networks`]: [...(ecosystemUsers[user.userId]?.networks || []), networkId]
+      });
+
+      // Initialize the NetworkChat document
+      const chatRef = doc(db, 'networkChats', networkId);
+      await setDoc(chatRef, {
+        networkId,
+        ecosystemCode: selectedEcosystemCode,
+        allowedUids: [user.firebaseUid],
+        createdAt: Date.now()
       });
 
       await fetchEcosystemData();
@@ -238,7 +268,7 @@ export const ManageNetworksScreen = () => {
     }
   };
 
-  const handleInviteMember = async (targetUid: string, targetUserId: string, networkId: string, networkName: string) => {
+  const handleInviteMember = async (targetUid: string, networkId: string, networkName: string) => {
     try {
       const db = getFirestore();
       const notifsRef = collection(db, 'users', targetUid, 'notifications');
@@ -321,7 +351,7 @@ export const ManageNetworksScreen = () => {
                     <Text style={[styles.secondaryButtonText, { color: colors.text.secondary }]}>Joined</Text>
                   </View>
                 ) : (
-                  <TouchableOpacity style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6 }]} onPress={() => handleInviteMember(u.firebaseUid, u.userId, networkId, networkName)}>
+                  <TouchableOpacity style={[styles.secondaryButton, { paddingHorizontal: 12, paddingVertical: 6 }]} onPress={() => handleInviteMember(u.firebaseUid, networkId, networkName)}>
                     <Text style={styles.secondaryButtonText}>Invite</Text>
                   </TouchableOpacity>
                 )}
@@ -334,7 +364,7 @@ export const ManageNetworksScreen = () => {
   };
 
   const handleJoinWithCode = async (code: string) => {
-    if (!selectedEcosystemCode || !code.trim()) return;
+    if (!selectedEcosystemCode || !code.trim() || !user) return;
     setLoading(true);
     closeModal();
     try {
@@ -361,6 +391,12 @@ export const ManageNetworksScreen = () => {
           if (!currentNetworks.includes(matchedNetworkId)) {
             await updateDoc(ecoRef, {
               [`users.${user.userId}.networks`]: [...currentNetworks, matchedNetworkId]
+            });
+
+            const { arrayUnion } = require('@react-native-firebase/firestore');
+            const chatRef = doc(db, 'networkChats', matchedNetworkId);
+            await updateDoc(chatRef, {
+              allowedUids: arrayUnion(user.firebaseUid)
             });
 
             await NotificationService.notifyEcosystemAdmins(selectedEcosystemCode, {
@@ -436,7 +472,7 @@ export const ManageNetworksScreen = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Networks Hub</Text>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.ecoSelector}
           onPress={() => {
             setModalConfig({
@@ -445,9 +481,9 @@ export const ManageNetworksScreen = () => {
               message: 'Choose an ecosystem to view its networks:',
               customContent: (
                 <View style={{ width: '100%', marginTop: 12 }}>
-                  {user?.ecosystems?.length ? user.ecosystems.map((eco, index) => (
-                    <TouchableOpacity 
-                      key={index} 
+                  {Array.from(new Set([...(user?.ecosystems || []), ...(user?.ecosystemCode && user?.isSuperAdmin ? [user.ecosystemCode] : [])])).map((eco, index) => (
+                    <TouchableOpacity
+                      key={index}
                       style={[styles.ecoOption, selectedEcosystemCode === eco && styles.ecoOptionSelected]}
                       onPress={() => {
                         setSelectedEcosystemCode(eco);
@@ -456,7 +492,10 @@ export const ManageNetworksScreen = () => {
                     >
                       <Text style={[styles.ecoOptionText, selectedEcosystemCode === eco && { color: colors.primary }]}>{eco}</Text>
                     </TouchableOpacity>
-                  )) : <Text style={{ color: colors.text.secondary }}>No ecosystems available.</Text>}
+                  ))}
+                  {Array.from(new Set([...(user?.ecosystems || []), ...(user?.ecosystemCode && user?.isSuperAdmin ? [user.ecosystemCode] : [])])).length === 0 && (
+                    <Text style={{ color: colors.text.secondary }}>No ecosystems available.</Text>
+                  )}
                 </View>
               ),
               actions: [{ label: 'Cancel', onPress: closeModal, variant: 'secondary' }]
@@ -496,7 +535,7 @@ export const ManageNetworksScreen = () => {
             key={netId}
             style={styles.networkCard}
             onPress={() => {
-              setActiveNetwork({ ...net, id: netId });
+              setActiveNetwork({ networkId: netId, ...net } as any);
               navigation.navigate('Main', { screen: 'Dashboard' });
             }}
           >
@@ -553,10 +592,10 @@ export const ManageNetworksScreen = () => {
         message="Generate a join code or directly invite users:"
         customContent={
           inviteModalNetworkId && networks[inviteModalNetworkId] ? (
-            <InviteModalContent 
-              networkId={inviteModalNetworkId} 
-              networkName={networks[inviteModalNetworkId].name} 
-              network={networks[inviteModalNetworkId]} 
+            <InviteModalContent
+              networkId={inviteModalNetworkId}
+              networkName={networks[inviteModalNetworkId].name}
+              network={networks[inviteModalNetworkId]}
             />
           ) : null
         }
@@ -576,8 +615,8 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
+    paddingBottom: 20,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -618,7 +657,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   networkName: {
     fontSize: 18,
@@ -671,6 +710,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    marginTop: 12,
     paddingTop: 12,
     gap: 16,
   },

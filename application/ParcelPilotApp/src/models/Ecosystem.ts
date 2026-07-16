@@ -10,14 +10,12 @@ export interface EcosystemNetwork {
 
 export interface EcosystemUser {
   firebaseUid: string;
-  displayName: string | null;
   role: 'SuperAdmin' | 'Admin' | 'User';
   networks?: string[];
 }
 
 export interface Ecosystem {
   ecosystemCode: string;
-  ownerName: string | null;
   ownerFirebaseUid: string;
   networks: Record<string, EcosystemNetwork>;
   users: Record<string, EcosystemUser>;
@@ -36,7 +34,6 @@ export const ecosystemConverter = {
     const data = snapshot.data();
     return {
       ecosystemCode: snapshot.id,
-      ownerName: data.ownerName,
       ownerFirebaseUid: data.ownerFirebaseUid,
       networks: data.networks || {},
       users: data.users || {},

@@ -15,9 +15,9 @@ export const UserManagementScreen = () => {
   const styles = createStyles(colors, isDark);
   const navigation = useNavigation();
 
-  const [ecosystemUsers, setEcosystemUsers] = useState<(EcosystemUser & { userId: string })[]>([]);
+  const [ecosystemUsers, setEcosystemUsers] = useState<(EcosystemUser & { userId: string; displayName: string })[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
     title: string;
@@ -33,7 +33,7 @@ export const UserManagementScreen = () => {
 
   const fetchUsers = async () => {
     if (!user?.ecosystemCode) return;
-    
+
     try {
       const db = getFirestore();
       const ecoRef = doc(db, 'ecosystems', user.ecosystemCode);
@@ -43,10 +43,26 @@ export const UserManagementScreen = () => {
       if (isExisting) {
         const ecoData = ecoSnap.data();
         const usersMap = ecoData?.users || {};
-        const usersArray: (EcosystemUser & { userId: string })[] = Object.entries(usersMap).map(([userId, data]) => ({
-          ...(data as EcosystemUser),
-          userId
-        }));
+        const usersArray: (EcosystemUser & { userId: string; displayName: string })[] = [];
+        for (const [userId, data] of Object.entries(usersMap)) {
+          const ecoUser = data as EcosystemUser;
+          let displayName = 'Unknown User';
+          try {
+            const uRef = doc(db, 'users', ecoUser.firebaseUid);
+            const uSnap = await getDoc(uRef);
+            const isUserExisting = typeof uSnap.exists === 'function' ? uSnap.exists() : uSnap.exists;
+            if (isUserExisting) {
+              displayName = uSnap.data()?.displayName || 'Unknown User';
+            }
+          } catch (e) {
+            console.warn('Failed to fetch user name', e);
+          }
+          usersArray.push({
+            ...ecoUser,
+            userId,
+            displayName
+          });
+        }
         setEcosystemUsers(usersArray);
       }
     } catch (error) {
@@ -63,7 +79,7 @@ export const UserManagementScreen = () => {
       if (newRole === 'Remove') {
         const db = getFirestore();
         const ecoRef = doc(db, 'ecosystems', user.ecosystemCode);
-        
+
         // Remove from the map using FieldValue.delete() is tricky in map objects if we update a whole object. 
         // We can just fetch, remove the key, and set. Or in Firebase we can use FieldValue.delete(). 
         // But since we don't have it imported, we'll just set it to null or remove it by fetching.
@@ -71,8 +87,20 @@ export const UserManagementScreen = () => {
         const data = ecoSnap.data();
         if (data && data.users) {
           const newUsers = { ...data.users };
+          const userObj = newUsers[targetUserId];
           delete newUsers[targetUserId];
           await updateDoc(ecoRef, { users: newUsers });
+
+          // Remove user from network chats allowedUids
+          if (userObj && userObj.networks) {
+            const { arrayRemove } = require('@react-native-firebase/firestore');
+            for (const netId of userObj.networks) {
+              const chatRef = doc(db, 'networkChats', netId);
+              await updateDoc(chatRef, {
+                allowedUids: arrayRemove(userObj.firebaseUid)
+              }).catch(() => { }); // ignore if chat doesn't exist
+            }
+          }
         }
 
         // Also remove from user's global profile
@@ -80,13 +108,13 @@ export const UserManagementScreen = () => {
         if (targetUserObj?.firebaseUid) {
           const userDocRef = doc(db, 'users', targetUserObj.firebaseUid);
           const userDoc = await getDoc(userDocRef);
-          
+
           const isUserExisting = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists;
           if (isUserExisting) {
             const userData = userDoc.data();
             const currentEcosystems = userData?.ecosystems || [];
             const newEcosystems = currentEcosystems.filter((eco: string) => eco !== user.ecosystemCode);
-            
+
             let updatePayload: any = { ecosystems: newEcosystems };
             if (userData?.ecosystemCode === user.ecosystemCode) {
               updatePayload.ecosystemCode = newEcosystems.length > 0 ? newEcosystems[0] : deleteField();
@@ -97,7 +125,7 @@ export const UserManagementScreen = () => {
       } else {
         const db = getFirestore();
         const ecoRef = doc(db, 'ecosystems', user.ecosystemCode);
-        
+
         let updatePayload: any = {
           [`users.${targetUserId}.role`]: newRole
         };
@@ -113,7 +141,7 @@ export const UserManagementScreen = () => {
 
         await updateDoc(ecoRef, updatePayload);
       }
-      
+
       await fetchUsers();
 
       // Send notification to the affected user
@@ -147,7 +175,7 @@ export const UserManagementScreen = () => {
     }
   };
 
-  const confirmUpdateRole = (targetUser: EcosystemUser & { userId: string }, newRole: 'Admin' | 'User' | 'Remove') => {
+  const confirmUpdateRole = (targetUser: EcosystemUser & { userId: string; displayName: string }, newRole: 'Admin' | 'User' | 'Remove') => {
     setModalConfig({
       visible: true,
       title: newRole === 'Remove' ? 'Confirm Removal' : 'Confirm Role Change',
@@ -189,7 +217,7 @@ export const UserManagementScreen = () => {
             {user?.isSuperAdmin && ecoUser.role !== 'SuperAdmin' && (
               <View style={styles.actionRow}>
                 {ecoUser.role === 'User' ? (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.actionButton}
                     onPress={() => confirmUpdateRole(ecoUser, 'Admin')}
                   >
@@ -197,7 +225,7 @@ export const UserManagementScreen = () => {
                     <Text style={styles.actionText}>Make Admin</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.actionButton}
                     onPress={() => confirmUpdateRole(ecoUser, 'User')}
                   >
@@ -205,7 +233,7 @@ export const UserManagementScreen = () => {
                     <Text style={[styles.actionText, { color: colors.danger }]}>Demote</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.actionButton}
                   onPress={() => confirmUpdateRole(ecoUser, 'Remove')}
                 >
@@ -237,8 +265,8 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
+    paddingBottom: 20,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -271,7 +299,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 2,
   },
   userName: {
     fontSize: 16,
@@ -291,9 +319,10 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     gap: 16,
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
   },
   actionButton: {
     flexDirection: 'row',

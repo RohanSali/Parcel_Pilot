@@ -55,14 +55,12 @@ export interface EcosystemNetwork {
 
 export interface EcosystemUser {
   firebaseUid: string;
-  displayName: string | null;
   role: 'SuperAdmin' | 'Admin' | 'User'; // Role explicitly inside this ecosystem
   networks?: string[];                   // Network IDs the user is a member of
 }
 
 export interface Ecosystem {
   ecosystemCode: string;         // Unique 6-character alphanumeric code & Document ID
-  ownerName: string | null;
   ownerFirebaseUid: string;      // The SuperAdmin creator
   
   // Embedded maps of Networks and Users to avoid heavy subcollections for small fleets

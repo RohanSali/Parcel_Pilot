@@ -19,13 +19,13 @@ export const NetworkSelectionScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Select Network</Text>
-      
+
       <FlatList
         data={mockNetworks}
         keyExtractor={(item) => item.networkId}
         renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.card} 
+          <TouchableOpacity
+            style={styles.card}
             onPress={() => setActiveNetwork(item)}
           >
             <Text style={styles.cardText}>{item.name}</Text>
@@ -42,11 +42,11 @@ export const NetworkSelectionScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: colors.dark.background,
     padding: 20,
-    paddingTop: 60,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
   },
   title: {
     fontSize: 24,

@@ -69,7 +69,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
     paddingBottom: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,

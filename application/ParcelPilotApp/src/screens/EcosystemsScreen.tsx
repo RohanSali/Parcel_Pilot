@@ -52,18 +52,37 @@ export const EcosystemsScreen = () => {
       const db = getFirestore();
       const fetched: EcosystemRoleInfo[] = [];
 
-      for (const ecoId of user.ecosystems) {
+      const allEcoIds = Array.from(new Set([
+        ...(user.ecosystems || []),
+        ...(user.ecosystemCode && user.isSuperAdmin ? [user.ecosystemCode] : [])
+      ]));
+
+      for (const ecoId of allEcoIds) {
         const ecoRef = doc(db, 'ecosystems', ecoId);
         const ecoSnap = await getDoc(ecoRef);
-        
+
         const isExisting = typeof ecoSnap.exists === 'function' ? ecoSnap.exists() : ecoSnap.exists;
         if (isExisting) {
           const data = ecoSnap.data();
           const role = data?.users?.[user.userId]?.role || 'Unknown';
+          let ownerName = 'Unknown Owner';
+          if (data?.ownerFirebaseUid) {
+            try {
+              const ownerRef = doc(db, 'users', data.ownerFirebaseUid);
+              const ownerSnap = await getDoc(ownerRef);
+              const isOwnerExisting = typeof ownerSnap.exists === 'function' ? ownerSnap.exists() : ownerSnap.exists;
+              if (isOwnerExisting) {
+                ownerName = ownerSnap.data()?.displayName || 'SuperAdmin';
+              }
+            } catch (err) {
+              console.warn('Failed to fetch owner name', err);
+            }
+          }
+
           fetched.push({
             ecoId,
             role,
-            ownerName: data?.ownerName || 'Unknown Owner'
+            ownerName
           });
         }
       }
@@ -91,13 +110,13 @@ export const EcosystemsScreen = () => {
     if (!user) return;
     closeModal();
     setLoading(true);
-    
+
     try {
       const db = getFirestore();
-      
+
       // 1. Remove from User's global array
       const newEcosystems = user.ecosystems.filter(e => e !== ecoId);
-      
+
       // If they leave their active ecosystem, switch active ecosystem to another one if available
       let newEcosystemCode: any = user.ecosystemCode;
       if (user.ecosystemCode === ecoId) {
@@ -108,7 +127,7 @@ export const EcosystemsScreen = () => {
         ecosystems: newEcosystems,
         ...(user.ecosystemCode === ecoId ? { ecosystemCode: newEcosystemCode } : {})
       });
-      
+
       // 2. Remove from Ecosystem doc
       const ecoRef = doc(db, 'ecosystems', ecoId);
       const ecoSnap = await getDoc(ecoRef);
@@ -121,7 +140,7 @@ export const EcosystemsScreen = () => {
 
       // Update local state
       updateUser({ ecosystems: newEcosystems, ecosystemCode: user.ecosystemCode === ecoId ? (newEcosystems.length > 0 ? newEcosystems[0] : undefined) : user.ecosystemCode });
-      
+
     } catch (error: any) {
       setModalConfig({
         visible: true,
@@ -152,51 +171,60 @@ export const EcosystemsScreen = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        
-        <TouchableOpacity 
-          style={styles.joinButton} 
+
+        <TouchableOpacity
+          style={styles.joinButton}
           onPress={() => triggerEcosystemPrompt()}
         >
           <Plus color={colors.text.inverse} size={24} />
           <Text style={styles.joinButtonText}>Join New Ecosystem</Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Joined Ecosystems</Text>
+        <Text style={styles.sectionTitle}>Owned Ecosystems</Text>
+        {ecosystems.filter(e => e.role === 'SuperAdmin').length === 0 && (
+          <Text style={styles.emptyText}>You don't own any ecosystems.</Text>
+        )}
+        {ecosystems.filter(e => e.role === 'SuperAdmin').map((eco) => (
+          <View key={eco.ecoId} style={styles.card}>
+            <View style={styles.cardInfo}>
+              <Layers color={colors.primary} size={24} style={{ marginRight: 16 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ecoId}>{eco.ecoId}</Text>
+                <Text style={styles.ecoDetails}>Owner: {eco.ownerName}</Text>
+                <Text style={styles.ecoRole}>Role: {eco.role}</Text>
+              </View>
+            </View>
+            <View style={styles.ownerBadge}>
+              <Text style={styles.ownerBadgeText}>Owner</Text>
+            </View>
+          </View>
+        ))}
 
-        {ecosystems.length === 0 && (
-          <Text style={styles.emptyText}>You are not part of any ecosystems yet.</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Joined Ecosystems</Text>
+
+        {ecosystems.filter(e => e.role !== 'SuperAdmin').length === 0 && (
+          <Text style={styles.emptyText}>You are not part of any other ecosystems.</Text>
         )}
 
-        {ecosystems.map((eco) => {
-          const isSuperAdmin = eco.role === 'SuperAdmin';
-
-          return (
-            <View key={eco.ecoId} style={styles.card}>
-              <View style={styles.cardInfo}>
-                <Layers color={colors.primary} size={24} style={{ marginRight: 16 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ecoId}>{eco.ecoId}</Text>
-                  <Text style={styles.ecoDetails}>Owner: {eco.ownerName}</Text>
-                  <Text style={styles.ecoRole}>Role: {eco.role}</Text>
-                </View>
+        {ecosystems.filter(e => e.role !== 'SuperAdmin').map((eco) => (
+          <View key={eco.ecoId} style={styles.card}>
+            <View style={styles.cardInfo}>
+              <Layers color={colors.primary} size={24} style={{ marginRight: 16 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.ecoId}>{eco.ecoId}</Text>
+                <Text style={styles.ecoDetails}>Owner: {eco.ownerName}</Text>
+                <Text style={styles.ecoRole}>Role: {eco.role}</Text>
               </View>
-
-              {!isSuperAdmin ? (
-                <TouchableOpacity 
-                  style={styles.leaveButton}
-                  onPress={() => confirmLeave(eco.ecoId)}
-                >
-                  <LogOut color={colors.danger} size={20} />
-                  <Text style={styles.leaveButtonText}>Leave</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.ownerBadge}>
-                  <Text style={styles.ownerBadgeText}>Owner</Text>
-                </View>
-              )}
             </View>
-          );
-        })}
+            <TouchableOpacity
+              style={styles.leaveButton}
+              onPress={() => confirmLeave(eco.ecoId)}
+            >
+              <LogOut color={colors.danger} size={20} />
+              <Text style={styles.leaveButtonText}>Leave</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
 
       </ScrollView>
 
@@ -220,7 +248,7 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: require('react-native').Dimensions.get('window').width > 768 ? 20 : 50,
     paddingBottom: 24,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,

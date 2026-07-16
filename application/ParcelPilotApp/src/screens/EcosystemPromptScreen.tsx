@@ -77,27 +77,28 @@ export const EcosystemPromptScreen = () => {
           if (validCodes.includes(code)) {
             const newEcosystemCode = generateEcosystemCode();
 
+            const newEcosystems = [...(user.ecosystems || []), newEcosystemCode];
+
             await authRepository.update(user.firebaseUid, {
               isSuperAdmin: true,
               ecosystemCode: newEcosystemCode,
+              ecosystems: newEcosystems,
             });
 
             const ecoRef = doc(db, 'ecosystems', newEcosystemCode);
             await setDoc(ecoRef, {
-              ownerName: user.displayName || 'SuperAdmin',
               ownerFirebaseUid: user.firebaseUid,
               networks: {},
               users: {
                 [user.userId]: {
                   firebaseUid: user.firebaseUid,
-                  displayName: user.displayName || 'Unknown',
                   role: 'SuperAdmin'
                 }
               },
               createdAt: Date.now()
             });
 
-            updateUser({ isSuperAdmin: true, ecosystemCode: newEcosystemCode });
+            updateUser({ isSuperAdmin: true, ecosystemCode: newEcosystemCode, ecosystems: newEcosystems });
 
             setModalConfig({
               visible: true,
