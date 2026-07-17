@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useAuthStore } from '../store/authStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, setDoc } from '@react-native-firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, addDoc, setDoc, deleteDoc, getDocs } from '@react-native-firebase/firestore';
 import { EcosystemNetwork, EcosystemUser } from '../models/Ecosystem';
 import { CustomModal, ModalAction } from '../components/ui/CustomModal';
 import { ArrowLeft, Plus, Users, Key, LogIn, Edit2, Trash2, Clock, LogOut } from 'lucide-react-native';
@@ -225,11 +225,44 @@ export const ManageNetworksScreen = () => {
       const ecoRef = doc(db, 'ecosystems', selectedEcosystemCode);
       const ecoSnap = await getDoc(ecoRef);
       const data = ecoSnap.data();
+      const updates: any = {};
       if (data && data.networks) {
         const updatedNetworks = { ...data.networks };
         delete updatedNetworks[networkId];
-        await updateDoc(ecoRef, { networks: updatedNetworks });
+        updates.networks = updatedNetworks;
       }
+      
+      if (data && data.users) {
+        Object.keys(data.users).forEach(uid => {
+          if (data.users[uid].networks && data.users[uid].networks.includes(networkId)) {
+            updates[`users.${uid}.networks`] = data.users[uid].networks.filter((n: string) => n !== networkId);
+          }
+        });
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(ecoRef, updates);
+      }
+      
+      try {
+        const messagesRef = collection(db, 'networkChats', networkId, 'messages');
+        const messagesSnap = await getDocs(messagesRef);
+        const deletePromises: Promise<void>[] = [];
+        messagesSnap.forEach((msgDoc) => {
+          deletePromises.push(deleteDoc(msgDoc.ref));
+        });
+        await Promise.all(deletePromises);
+      } catch (e) {
+        console.warn('Failed to delete messages subcollection', e);
+      }
+
+      try {
+        const chatRef = doc(db, 'networkChats', networkId);
+        await deleteDoc(chatRef);
+      } catch (e) {
+        console.warn('Failed to delete chat document', e);
+      }
+      
       await fetchEcosystemData();
     } catch (error) {
       console.error(error);

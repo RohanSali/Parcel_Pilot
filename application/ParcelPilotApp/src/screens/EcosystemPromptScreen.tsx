@@ -140,7 +140,6 @@ export const EcosystemPromptScreen = () => {
         await updateDoc(ecoRef, {
           [`users.${user.userId}`]: {
             firebaseUid: user.firebaseUid,
-            displayName: user.displayName || 'Unknown',
             role: 'User'
           }
         });
