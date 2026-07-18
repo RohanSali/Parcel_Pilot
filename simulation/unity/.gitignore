@@ -1,0 +1,32 @@
+# ==========================
+# Unity Generated Folders
+# ==========================
+ParcelPilotSimulation1/[Ll]ibrary/
+ParcelPilotSimulation1/[Tt]emp/
+ParcelPilotSimulation1/[Oo]bj/
+ParcelPilotSimulation1/[Bb]uild/
+ParcelPilotSimulation1/[Bb]uilds/
+ParcelPilotSimulation1/[Ll]ogs/
+ParcelPilotSimulation1/[Mm]emoryCaptures/
+ParcelPilotSimulation1/[Uu]ser[Ss]ettings/
+
+# Visual Studio / Rider
+ParcelPilotSimulation1/.vs/
+ParcelPilotSimulation1/.idea/
+ParcelPilotSimulation1/*.csproj
+ParcelPilotSimulation1/*.sln
+ParcelPilotSimulation1/*.suo
+ParcelPilotSimulation1/*.user
+ParcelPilotSimulation1/*.userprefs
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Python Virtual Environments (if created under simulation/unity)
+.venv/
+venv/
+
+# Python Cache
+__pycache__/
+*.pyc
